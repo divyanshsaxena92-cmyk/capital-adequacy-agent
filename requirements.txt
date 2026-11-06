@@ -1,0 +1,9 @@
+# Offline build: no LLM, no API key. Nothing here sends client data anywhere.
+openpyxl>=3.1
+PyYAML>=6.0
+pandas>=2.0
+streamlit>=1.50      # dashboard (includes Altair for charts)
+requests>=2.31       # only used to download RBI's public PDFs into the knowledge base
+beautifulsoup4>=4.12 # reading saved RBI web pages
+pypdf>=4.0           # reading RBI PDFs
+# reportlab          # optional, tests only

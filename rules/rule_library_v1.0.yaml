@@ -1,0 +1,382 @@
+# Controlled rule library - NBFC capital adequacy
+# Every rule must cite KB passage IDs. Rules with status != APPROVED are ignored by the engine.
+# interpretive: true  => the regulation is silent/ambiguous for this item; agent may propose, never auto-apply.
+# Treatments: T1_INCLUDE | T1_EXCLUDE | T1_DEDUCT | T2_GENERAL_PROVISION | RISK_WEIGHT | INFO
+library_version: "RL-1.0"
+framework: "NBFC-CA-2025"
+approved_by: "PENDING - SME sign-off required before production use"
+rules:
+  # ---------------- Tier 1 inclusions ----------------
+  - id: R-T1-001
+    area: Tier 1
+    title: Paid-up equity share capital
+    match_terms: [equity share capital, paid-up, common equity, share capital]
+    treatment: T1_INCLUDE
+    citations: [P9, P7]
+    interpretive: false
+    default_confidence: 0.97
+    evidence_required: Share capital note / ROC filings
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-002
+    area: Tier 1
+    title: Securities premium on equity issues
+    match_terms: [securities premium, share premium]
+    treatment: T1_INCLUDE
+    citations: [P9, P7]
+    interpretive: false
+    default_confidence: 0.96
+    evidence_required: Other equity note
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-003
+    area: Tier 1
+    title: Retained earnings / profit for the year
+    match_terms: [retained earnings, surplus, profit and loss, accumulated profit]
+    treatment: T1_INCLUDE
+    citations: [P7, P9-iii]
+    interpretive: false
+    default_confidence: 0.88
+    evidence_required: Confirm year-end figures audited; dividend appropriation after reporting date
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-004
+    area: Tier 1
+    title: Statutory reserve u/s 45-IC of the RBI Act
+    match_terms: [statutory reserve, 45-ic, reserve fund]
+    treatment: T1_INCLUDE
+    conservative_treatment: T1_EXCLUDE
+    alternatives:
+      - {treatment: T1_INCLUDE, basis: "Para 7(iv) names statutory reserves as a CET1 element (NBFC-UL); widely read as a free reserve for owned fund."}
+      - {treatment: T1_EXCLUDE, basis: "Para 9 (owned fund, NBFC-ML) admits only 'free reserves'; a 45-IC reserve is earmarked and its use is restricted by statute."}
+    citations: [P7, P9, P10]
+    interpretive: true
+    default_confidence: 0.60
+    evidence_required: NBFC layer classification (ML vs UL); firm methodology precedent; prior RBI returns treatment
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-005
+    area: Tier 1
+    title: Other disclosed free reserves / equity contributions
+    match_terms: [capital contribution, corporate guarantee, esop, share based payment, equity others, free reserves]
+    treatment: T1_EXCLUDE
+    conservative_treatment: T1_EXCLUDE
+    alternatives:
+      - {treatment: T1_EXCLUDE, basis: "Notional Ind AS credits (parent guarantee fair value, unvested ESOP charge) are not paid-in capital and are not reserves created out of profits."}
+      - {treatment: T1_INCLUDE, basis: "Para 7(vi) admits 'other disclosed free reserves'; vested/unencumbered contributions may qualify."}
+    citations: [P7, P9]
+    interpretive: true
+    default_confidence: 0.62
+    evidence_required: Nature of contribution (guarantee terms, ESOP vesting, whether refundable / encumbered)
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Tier 1 Ind AS adjustments ----------------
+  - id: R-T1-006
+    area: Tier 1
+    title: Cash flow hedge reserve - derecognise
+    match_terms: [cash flow hedge reserve, cfhr, hedge reserve]
+    treatment: T1_EXCLUDE
+    citations: [P16-3]
+    interpretive: false
+    default_confidence: 0.96
+    evidence_required: OCI reserve note
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-007
+    area: Tier 1
+    title: Cost of hedging reserve
+    match_terms: [cost of hedging]
+    treatment: T1_INCLUDE
+    conservative_treatment: T1_INCLUDE
+    alternatives:
+      - {treatment: T1_INCLUDE, basis: "Para 16(1): net unrealised losses are recognised in capital; this is a debit balance."}
+      - {treatment: T1_EXCLUDE, basis: "Para 16(3): the reserve arises from the same cash-flow hedge relationship as the CFHR and could be derecognised with it."}
+    citations: [P16-1, P16-3, P16-4]
+    interpretive: true
+    default_confidence: 0.58
+    evidence_required: Hedge documentation linking cost-of-hedging reserve to designated CFH relationships
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-008
+    area: Tier 1
+    title: Remeasurement of defined benefit plans (OCI)
+    match_terms: [remeasurement, defined benefit, actuarial]
+    treatment: T1_EXCLUDE
+    conservative_treatment: T1_EXCLUDE
+    alternatives:
+      - {treatment: T1_EXCLUDE, basis: "Conservative: credit balance not demonstrated to be a free reserve."}
+      - {treatment: T1_INCLUDE, basis: "Para 8(6) requires DB liabilities to be fully recognised; actuarial gains form part of reserves."}
+    citations: [P8-6, P16-1]
+    interpretive: true
+    default_confidence: 0.55
+    evidence_required: Actuarial report; whether a net DB asset exists (deductible)
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Tier 1 deductions ----------------
+  - id: R-T1-009
+    area: Tier 1
+    title: Deferred tax assets (net of DTL)
+    match_terms: [deferred tax asset, dta]
+    treatment: T1_DEDUCT
+    citations: [P14, P8-2]
+    interpretive: false
+    default_confidence: 0.95
+    evidence_required: Tax note confirming DTA/DTL composition and same-authority netting
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-010
+    area: Tier 1
+    title: Prepaid expenses / deferred revenue expenditure
+    match_terms: [prepaid, deferred revenue expenditure]
+    treatment: T1_DEDUCT
+    conservative_treatment: T1_DEDUCT
+    alternatives:
+      - {treatment: T1_DEDUCT, basis: "Para 9(viii): owned fund is reduced by deferred revenue expenditure; prepaids treated as analogous (conservative)."}
+      - {treatment: T1_INCLUDE, basis: "Prepaid expenses are not intangibles or DRE under Ind AS; carry 100% risk weight instead."}
+    citations: [P9, P18-2]
+    interpretive: true
+    default_confidence: 0.70
+    evidence_required: Nature of prepaid balance
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T1-011
+    area: Tier 1
+    title: Right-of-use asset - not deducted if underlying is tangible
+    match_terms: [right-of-use, right of use, rou]
+    treatment: T1_EXCLUDE
+    citations: [P8-1, P9]
+    interpretive: false
+    default_confidence: 0.92
+    evidence_required: Lease register confirming tangible underlying (premises)
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Tier 2 ----------------
+  - id: R-T2-001
+    area: Tier 2
+    title: Stage 1 ECL as general provision, capped at 1.25% of RWA
+    match_terms: [stage 1, ecl, impairment loss allowance, general provision, standard asset provision]
+    treatment: T2_GENERAL_PROVISION
+    cap: {basis: total_rwa, rate: 0.0125}
+    citations: [P13, P16-6]
+    interpretive: false
+    default_confidence: 0.92
+    evidence_required: ECL staging note
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T2-002
+    area: Tier 2
+    title: Tier 2 may not exceed 100% of Tier 1
+    match_terms: [tier 2 limit]
+    treatment: INFO
+    citations: [P6]
+    interpretive: false
+    default_confidence: 0.99
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- RWA ----------------
+  - id: R-RWA-001
+    area: RWA
+    title: Cash and bank balances - 0%
+    match_terms: [cash, bank balances, fixed deposit]
+    treatment: RISK_WEIGHT
+    risk_weight: 0.0
+    citations: [P18-1]
+    interpretive: false
+    default_confidence: 0.97
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-002
+    area: RWA
+    title: Retail consumer credit / credit card receivables - 125%
+    match_terms: [loans, loan portfolio, consumer credit, credit card receivable]
+    treatment: RISK_WEIGHT
+    risk_weight: 1.25
+    conservative_treatment: RISK_WEIGHT
+    alternatives:
+      - {risk_weight: 1.25, basis: "Para 18(1)(3)(e)(i)-(ii): unsecured retail consumer credit and credit card receivables."}
+      - {risk_weight: 1.00, basis: "Para 18(1)(3)(e): housing, vehicle, education, gold and MFI loans and other secured loans are carved out of the 125% bucket."}
+    citations: [P18-1, P18-2, P16-6]
+    interpretive: true
+    default_confidence: 0.72
+    evidence_required: Product-wise loan book (retail unsecured / card / secured / staff) with stage-wise ECL
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-003
+    area: RWA
+    title: Receivables, deposits and other financial assets - 100%
+    match_terms: [trade receivables, security deposits, payment gateway, other advances, receivables]
+    treatment: RISK_WEIGHT
+    risk_weight: 1.0
+    citations: [P18-1]
+    interpretive: false
+    default_confidence: 0.85
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-004
+    area: RWA
+    title: TDS and advance tax (net of provision) - 0%
+    match_terms: [tds, tds recoverable, income tax deducted at source, advance tax]
+    treatment: RISK_WEIGHT
+    risk_weight: 0.0
+    citations: [P18-1]
+    interpretive: false
+    default_confidence: 0.93
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-005
+    area: RWA
+    title: Fixed assets, ROU and other assets - 100%
+    match_terms: [property, plant, equipment, fixed assets, right-of-use, right of use, other non-financial assets, prepaid]
+    treatment: RISK_WEIGHT
+    risk_weight: 1.0
+    citations: [P18-1]
+    interpretive: false
+    default_confidence: 0.92
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-006
+    area: RWA
+    title: Assets deducted from owned fund carry 0% risk weight
+    match_terms: []   # applied only via context: asset already deducted from capital
+    treatment: RISK_WEIGHT
+    risk_weight: 0.0
+    citations: [P18-2]
+    interpretive: false
+    default_confidence: 0.94
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-RWA-007
+    area: RWA
+    title: Exposure measured gross of Stage 1 ECL (only specific provisions may be netted)
+    match_terms: [ecl gross-up, netting of provisions]
+    treatment: INFO
+    citations: [P18-2, P16-6]
+    interpretive: false
+    default_confidence: 0.85
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Counterparty credit risk ----------------
+  - id: R-CCR-001
+    area: RWA
+    title: Derivatives - Current Exposure Method (RC + PFE)
+    match_terms: [derivative, cross currency swap, swap, forward, cem]
+    treatment: INFO
+    add_on_table:
+      interest_rate: [[1, 0.005], [5, 0.01], [999, 0.03]]
+      fx_gold: [[1, 0.02], [5, 0.10], [999, 0.15]]
+    citations: [P18-7, P18-8]
+    interpretive: false
+    default_confidence: 0.90
+    evidence_required: Deal-level MTM, contract type, principal exchange schedule
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-CCR-002
+    area: RWA
+    title: Counterparty risk weight - 0% sovereign / 20% bank / 100% others
+    match_terms: [counterparty, bank counterparty]
+    treatment: RISK_WEIGHT
+    risk_weight: 0.20
+    citations: [P18-3]
+    interpretive: false
+    default_confidence: 0.75
+    evidence_required: Counterparty legal entity type per deal
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Minimums ----------------
+  - id: R-MIN-001
+    area: Control
+    title: Minimum ratios by layer
+    match_terms: [minimum crar]
+    treatment: INFO
+    minimums:
+      ML: {crar: 0.15, tier1: 0.10}
+      UL: {crar: 0.15, tier1: 0.10, cet1: 0.09}
+    citations: [P6]
+    interpretive: false
+    default_confidence: 0.99
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  # ---------------- Basel III (binding for banks; benchmark lens for NBFCs) ----------------
+  - id: R-B3-001
+    area: Basel III
+    title: Minimum CET1 5.5%, Tier 1 7%, total capital 9% of RWA
+    match_terms: []
+    treatment: INFO
+    citations: [B3-MIN]
+    interpretive: false
+    default_confidence: 0.97
+    effective_from: "2025-11-28"
+    status: APPROVED
+  - id: R-B3-002
+    area: Basel III
+    title: Capital conservation buffer 2.5% in CET1, with distribution restrictions
+    match_terms: []
+    treatment: INFO
+    citations: [B3-CCB]
+    interpretive: false
+    default_confidence: 0.97
+    effective_from: "2025-11-28"
+    status: APPROVED
+  - id: R-B3-003
+    area: Basel III
+    title: Countercyclical buffer 0-2.5% in CET1 when activated
+    match_terms: []
+    treatment: INFO
+    citations: [B3-CCYB]
+    interpretive: false
+    default_confidence: 0.95
+    effective_from: "2025-11-28"
+    status: APPROVED
+  - id: R-B3-004
+    area: Basel III
+    title: D-SIB additional CET1 0.20-0.80%
+    match_terms: []
+    treatment: INFO
+    citations: [B3-DSIB]
+    interpretive: false
+    default_confidence: 0.95
+    effective_from: "2025-11-28"
+    status: APPROVED
+  - id: R-B3-005
+    area: Basel III
+    title: Leverage ratio 4% (D-SIBs) / 3.5% (other banks)
+    match_terms: []
+    treatment: INFO
+    citations: [B3-LEV]
+    interpretive: false
+    default_confidence: 0.95
+    effective_from: "2025-11-28"
+    status: APPROVED
+  - id: R-B3-006
+    area: Basel III
+    title: General provisions in Tier 2 up to 1.25% of credit RWA; AT1 perpetual and loss-absorbing
+    match_terms: []
+    treatment: INFO
+    citations: [B3-T2]
+    interpretive: false
+    default_confidence: 0.9
+    effective_from: "2025-11-28"
+    status: APPROVED

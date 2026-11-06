@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Capital Command Centre</title></head>
+<body><div id="root"></div>
+<script>
+/* Capital Command Centre - local Streamlit custom component.
+   Speaks Streamlit's component protocol directly (componentReady / render / setFrameHeight / setComponentValue).
+   No network requests, no external libraries. */
+(function () {
+  "use strict";
+  var send = function (type, data) {
+    var m = { isStreamlitMessage: true, type: type };
+    for (var k in (data || {})) m[k] = data[k];
+    window.parent.postMessage(m, "*");
+  };
+  var lastHtml = null, DATA = {}, theme = "light", lastH = 0, clockTimer = null, sortDesc = null;
+  try { theme = window.localStorage.getItem("gt-theme") || "light"; } catch (e) { /* storage may be blocked */ }
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function setHeight() {
+    var r = document.getElementById("root");
+    var h = Math.ceil(r ? r.getBoundingClientRect().height : document.body.scrollHeight) + 4;   /* content, not viewport */
+    var ov = document.querySelector(".ov-panel");
+    if (ov) { var b = ov.getBoundingClientRect().bottom + window.scrollY + 24; if (b > h) h = Math.ceil(b); }
+    if (Math.abs(h - lastH) > 1) { lastH = h; send("streamlit:setFrameHeight", { height: h }); }
+  }
+  function emit(v) { v.nonce = String(Date.now()) + Math.random().toString(16).slice(2, 8);
+                     send("streamlit:setComponentValue", { value: v, dataType: "json" }); }
+
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (!d || d.type !== "streamlit:render") return;
+    var a = d.args || {};
+    if (a.data && a.data.theme && a.data.theme !== theme && lastHtml === a.html) { theme = a.data.theme; applyTheme(); }
+    if (a.html !== lastHtml) { lastHtml = a.html; DATA = a.data || {}; if (DATA.theme) theme = DATA.theme;
+                               document.getElementById("root").innerHTML = a.html; init(); }
+    setHeight();
+  });
+
+  function fmt(x, dp, pre, suf) {
+    return pre + Number(x).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp }) + suf;
+  }
+  function countUps(root) {
+    root.querySelectorAll("[data-count]").forEach(function (el) {
+      var v = parseFloat(el.dataset.count), dp = parseInt(el.dataset.dp || "0", 10);
+      var pre = el.dataset.prefix || "", suf = el.dataset.suffix || "";
+      if (reduce || !isFinite(v)) { el.textContent = fmt(v, dp, pre, suf); return; }
+      var t0 = null, dur = 1300;
+      function step(t) { if (t0 === null) t0 = t; var p = Math.min((t - t0) / dur, 1); var e = 1 - Math.pow(1 - p, 3);
+        el.textContent = fmt(v * e, dp, pre, suf); if (p < 1) requestAnimationFrame(step); }
+      requestAnimationFrame(step);
+    });
+  }
+
+
+  /* ---------------------------------------------------------------- generic page features */
+  function openDrill(root, key, anchor) {
+    var tpl = root.querySelector('template[data-drill-body="' + key + '"]');
+    if (!tpl) return;
+    closeDrill(root);
+    var cc = root, top = anchor.getBoundingClientRect().top - cc.getBoundingClientRect().top;
+    var bd = document.createElement("div"); bd.className = "ov-backdrop";
+    var pn = document.createElement("div"); pn.className = "ov-panel";
+    pn.style.top = Math.max(12, top - 8) + "px";
+    pn.innerHTML = '<button class="ov-x" title="Close (Esc)">\u00d7</button>' + tpl.innerHTML;
+    cc.appendChild(bd); cc.appendChild(pn);
+    bd.addEventListener("click", function () { closeDrill(root); });
+    pn.querySelector(".ov-x").addEventListener("click", function () { closeDrill(root); });
+    countUps(pn); wireTables(pn);
+    setHeight();
+    var y = pn.getBoundingClientRect().top + window.scrollY - 10;
+    try { window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: lastH }, "*"); } catch (e) {}
+    if (pn.scrollIntoView) pn.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  function closeDrill(root) {
+    root.querySelectorAll(".ov-backdrop, .ov-panel").forEach(function (n) { n.remove(); });
+    setHeight();
+  }
+  function wireTables(scope) {
+    scope.querySelectorAll("table[data-table]").forEach(function (t) {
+      if (t.dataset.wired) return; t.dataset.wired = "1";
+      var tb = t.tBodies[0]; if (!tb) return;
+      var id = t.getAttribute("data-table"), state = { q: "", chips: {} };
+      var apply = function () {
+        var n = 0;
+        Array.prototype.forEach.call(tb.rows, function (r) {
+          var ok = !state.q || r.textContent.toLowerCase().indexOf(state.q) >= 0;
+          for (var k in state.chips) { var v = state.chips[k]; if (v && v !== "all" && (r.dataset[k] || "") !== v) ok = false; }
+          r.style.display = ok ? "" : "none"; if (ok) n++;
+        });
+        scope.querySelectorAll('[data-count-for="' + id + '"]').forEach(function (c) { c.textContent = n; });
+        setHeight();
+      };
+      t.querySelectorAll("th[data-sort]").forEach(function (th, i) {
+        th.style.cursor = "pointer"; th.title = "Sort";
+        th.addEventListener("click", function () {
+          var col = th.cellIndex, num = th.dataset.sort === "num", dir = th.dataset.dir === "asc" ? "desc" : "asc";
+          t.querySelectorAll("th[data-sort]").forEach(function (x) { x.dataset.dir = ""; x.classList.remove("sorted"); });
+          th.dataset.dir = dir; th.classList.add("sorted");
+          var rows = Array.prototype.slice.call(tb.rows);
+          rows.sort(function (a, b) {
+            var x = a.cells[col].dataset.v || a.cells[col].textContent, y = b.cells[col].dataset.v || b.cells[col].textContent;
+            var c = num ? (parseFloat(x) || 0) - (parseFloat(y) || 0) : x.localeCompare(y);
+            return dir === "asc" ? c : -c;
+          });
+          rows.forEach(function (r) { tb.appendChild(r); });
+        });
+      });
+      scope.querySelectorAll('input[data-search-for="' + id + '"]').forEach(function (inp) {
+        inp.addEventListener("input", function () { state.q = inp.value.trim().toLowerCase(); apply(); });
+      });
+      scope.querySelectorAll('[data-chips-for="' + id + '"]').forEach(function (box) {
+        box.querySelectorAll("button[data-key]").forEach(function (b) {
+          b.addEventListener("click", function (e) {
+            e.stopPropagation(); state.chips[b.dataset.key] = b.dataset.val;
+            box.querySelectorAll("button[data-key]").forEach(function (x) { x.classList.toggle("on", x === b); }); apply();
+          });
+        });
+      });
+    });
+  }
+  function wireSets(root) {
+    root.querySelectorAll("[data-set]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var p = b.dataset.set.split(":"), grp = p[0], opt = p[1], vals = (DATA.sets || {})[grp] || {};
+        root.querySelectorAll('[data-set^="' + grp + ':"]').forEach(function (x) { x.classList.toggle("on", x === b); });
+        var v = vals[opt] || {};
+        root.querySelectorAll('[data-out^="' + grp + ':"]').forEach(function (o) {
+          var f = o.dataset.out.split(":")[1]; if (v[f] !== undefined) o.textContent = v[f];
+        });
+        root.querySelectorAll('[data-bar^="' + grp + ':"]').forEach(function (o) {
+          var f = o.dataset.bar.split(":")[1]; if (v[f] !== undefined) o.style.width = v[f];
+        });
+      });
+    });
+  }
+
+
+  /* Basel III page: live dials */
+  function wireBasel(root) {
+    var B = DATA.b3; if (!B) return;
+    var st = { dsib: 0, ccyb: 0, op: 0 };
+    var pc = function (x) { return (x * 100).toFixed(2) + "%"; };
+    var out = function (k, v) { root.querySelectorAll('[data-b3o="' + k + '"]').forEach(function (e) { e.textContent = v; }); };
+    var upd = function () {
+      var rwa = B.crwa * (1 + st.op), t2 = Math.min(B.gp, 0.0125 * B.crwa), buf = B.ccb + st.ccyb + st.dsib;
+      var r = { cet1: B.cet1 / rwa, tier1: B.t1 / rwa, total: (B.t1 + t2) / rwa, leverage: B.exp ? B.t1 / B.exp : 0 };
+      var mn = { cet1: B.min.cet1, tier1: B.min.tier1, total: B.min.total, leverage: st.dsib > 0 ? B.lev_d : B.lev_o };
+      var rq = { cet1: B.min.cet1 + buf, tier1: B.min.tier1 + buf, total: B.min.total + buf, leverage: mn.leverage };
+      var bind = null, worst = 9, allok = true;
+      ["cet1", "tier1", "total", "leverage"].forEach(function (k) {
+        var h = r[k] - rq[k]; if (h < worst) { worst = h; bind = k; } if (h < 0) allok = false;
+        out(k, pc(r[k])); out(k + "_min", pc(mn[k])); out(k + "_req", pc(rq[k]));
+        out(k + "_h", (h >= 0 ? "+" : "") + (h * 100).toFixed(2) + " pp");
+        root.querySelectorAll('[data-b3s="' + k + '"]').forEach(function (e) {
+          e.innerHTML = h >= 0 ? '<span class="tag" style="background:rgba(46,139,94,.13);color:#2E8B5E">Meets</span>'
+                               : '<span class="tag" style="background:rgba(214,69,96,.13);color:#D64560">Short</span>'; });
+      });
+      out("cet1_big", (r.cet1 * 100).toFixed(2));
+      out("binding", { cet1: "CET1", tier1: "Tier 1", total: "Total capital", leverage: "Leverage" }[bind] + " (" + (worst * 100).toFixed(2) + " pp)");
+      var pos = buf > 0 ? (r.cet1 - B.min.cet1) / buf : 9, q = pos >= 1 ? 4 : pos < .25 ? 0 : pos < .5 ? 1 : pos < .75 ? 2 : 3;
+      if (r.cet1 < B.min.cet1) q = -1;
+      out("cons", q === 4 ? "none" : q === -1 ? "below minimum" : ["100%", "80%", "60%", "40%"][q] + " of earnings conserved");
+      out("status", allok ? "Meets all Basel III requirements" : "Short of a requirement");
+      root.querySelectorAll(".b3l").forEach(function (e) { e.classList.toggle("on", parseInt(e.dataset.q, 10) === q); });
+      var box = root.querySelector("#b3stack");
+      if (box) {
+        var held = [["CET1", r.cet1, "#3B2160"], ["AT1", (B.t1 - B.cet1) / rwa, "#7B4FC4"], ["Tier 2", t2 / rwa, "#B9A8D9"]];
+        var req = [["CET1 5.5%", B.min.cet1, "#3B2160"], ["AT1 1.5%", B.min.tier1 - B.min.cet1, "#7B4FC4"],
+                   ["T2 2.0%", B.min.total - B.min.tier1, "#B9A8D9"], ["CCB 2.5%", B.ccb, "#D48B12"],
+                   ["CCyB", st.ccyb, "#E07A2E"], ["D-SIB", st.dsib, "#D64560"]];
+        var top = Math.max(r.total, rq.total) * 1.08;
+        var col = function (segs) { return segs.filter(function (s) { return s[1] > 0.00001; }).map(function (s) {
+          return '<div class="b3seg" title="' + s[0] + " " + pc(s[1]) + '" style="height:' + (s[1] / top * 100).toFixed(2) + '%;background:' + s[2] + '">'
+                 + (s[1] / top > .06 ? s[0].split(" ")[0] + " " + pc(s[1]) : "") + "</div>"; }).join(""); };
+        box.innerHTML = '<div style="flex:1;height:100%;display:flex;flex-direction:column"><div class="b3col">' + col(req) +
+          '</div><div class="b3cap">Required ' + pc(rq.total) + '</div></div><div style="flex:1;height:100%;display:flex;flex-direction:column">' +
+          '<div class="b3col">' + col(held) + '</div><div class="b3cap">Held ' + pc(r.total) + "</div></div>";
+      }
+    };
+    root.querySelectorAll("[data-b3]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation(); var p = b.dataset.b3.split(":"); st[p[0]] = parseFloat(p[1]);
+        root.querySelectorAll('[data-b3^="' + p[0] + ':"]').forEach(function (x) { x.classList.toggle("on", x === b); }); upd();
+      });
+    });
+    upd();
+  }
+
+
+  /* ---------------------------------------------------------------- theme, density, palette, shortcuts, card tools */
+  function applyTheme() {
+    var root = document.getElementById("cc"); if (!root) return;
+    root.dataset.theme = theme;
+    var su = root.querySelector(".i-sun"), mo = root.querySelector(".i-moon");
+    if (su) su.style.display = theme === "light" ? "" : "none";
+    if (mo) mo.style.display = theme === "dark" ? "" : "none";
+    document.body.style.background = theme === "dark" ? "#0D0A13" : "transparent";
+  }
+  function toggleTheme() {
+    theme = theme === "light" ? "dark" : "light"; applyTheme();
+    try { window.localStorage.setItem("gt-theme", theme); } catch (e) {}
+    emit({ type: "theme", value: theme });                    /* the whole app follows */
+  }
+  var density = "compact";
+  try { density = window.localStorage.getItem("gt-density") || "compact"; } catch (e) {}
+  function applyDensity() { var r = document.getElementById("cc"); if (r) r.dataset.density = density; setTimeout(setHeight, 50); }
+  function toggleDensity() { density = density === "compact" ? "comfortable" : "compact"; applyDensity();
+    try { window.localStorage.setItem("gt-density", density); } catch (e) {} toast("Density: " + density); }
+  var lastY = 120;
+  document.addEventListener("pointerdown", function (e) { lastY = e.clientY + window.scrollY; }, true);
+  function panelAt(cls, html) {
+    var root = document.getElementById("cc"); closeDrill(root);
+    var bd = document.createElement("div"); bd.className = "ov-backdrop";
+    var pn = document.createElement("div"); pn.className = "ov-panel " + cls;
+    pn.style.top = Math.max(12, lastY - 140) + "px"; pn.innerHTML = html;
+    root.appendChild(bd); root.appendChild(pn);
+    bd.addEventListener("click", function () { closeDrill(root); });
+    setHeight(); return pn;
+  }
+  function toast(msg) {
+    var t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+    t.style.top = Math.max(12, lastY - 40) + "px"; document.getElementById("cc").appendChild(t);
+    setTimeout(function () { t.remove(); }, 1600);
+  }
+  function openPalette() {
+    var cmds = [{ label: "Toggle day / night", hint: "T", run: toggleTheme }, { label: "Toggle compact / comfortable", hint: "D", run: toggleDensity },
+                { label: "Keyboard shortcuts", hint: "?", run: openHelp }];
+    (DATA.commands || []).forEach(function (c) { cmds.push({ label: "Go to " + c.label, hint: c.section, run: function () { emit({ type: "nav", page: c.page }); } }); });
+    var pn = panelAt("pal", '<div class="pal-in"><span>\u2318</span><input id="palq" placeholder="Jump to a page, run a command, or ask the agent\u2026" autocomplete="off"></div><div class="pal-list"></div><div class="pal-ft">\u2191\u2193 move \u00b7 Enter run \u00b7 Esc close</div>');
+    var q = pn.querySelector("#palq"), list = pn.querySelector(".pal-list"), sel = 0, shown = [];
+    var draw = function () {
+      var t = q.value.trim().toLowerCase();
+      shown = cmds.filter(function (c) { return !t || c.label.toLowerCase().indexOf(t) >= 0 || (c.hint || "").toLowerCase().indexOf(t) >= 0; });
+      if (t) shown.push({ label: "Ask the agent: \u201c" + q.value.trim() + "\u201d", hint: "Enter", run: function () { emit({ type: "ask", q: q.value.trim() }); } });
+      sel = Math.min(sel, shown.length - 1);
+      list.innerHTML = shown.map(function (c, i) { return '<div class="pal-it' + (i === sel ? " on" : "") + '" data-i="' + i + '"><span>' +
+        c.label.replace(/</g, "&lt;") + '</span><kbd>' + (c.hint || "") + '</kbd></div>'; }).join("");
+    };
+    q.addEventListener("input", function () { sel = 0; draw(); });
+    q.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown") { sel = Math.min(sel + 1, shown.length - 1); draw(); e.preventDefault(); }
+      else if (e.key === "ArrowUp") { sel = Math.max(sel - 1, 0); draw(); e.preventDefault(); }
+      else if (e.key === "Enter" && shown[sel]) { var c = shown[sel]; closeDrill(document.getElementById("cc")); c.run(); }
+      else if (e.key === "Escape") closeDrill(document.getElementById("cc"));
+    });
+    list.addEventListener("click", function (e) { var it = e.target.closest(".pal-it"); if (!it) return;
+      var c = shown[parseInt(it.dataset.i, 10)]; closeDrill(document.getElementById("cc")); c.run(); });
+    draw(); q.focus();
+  }
+  function openHelp() {
+    panelAt("", '<button class="ov-x">\u00d7</button><div class="ov-h">Keyboard shortcuts</div><div class="ov-s">Click inside the dashboard first</div>' +
+      '<div class="ov-grid">' + [["Ctrl / \u2318 + K", "Command palette"], ["/", "Search this page"], ["T", "Day / night (whole app)"],
+      ["D", "Compact / comfortable"], ["Esc", "Close any panel"], ["?", "This help"], ["Click a tile or row", "Detail opens over the page"],
+      ["\u2922 on a card", "Expand the card"]].map(function (k) { return '<div class="ov-box"><small>' + k[1] + '</small><b>' + k[0] + '</b></div>'; }).join("") + "</div>")
+      .querySelector(".ov-x").addEventListener("click", function () { closeDrill(document.getElementById("cc")); });
+  }
+  var ICONS = {
+    shield: '<path d="M12 3l7 3v5c0 4.4-3 8.3-7 9.5C8 19.3 5 15.4 5 11V6l7-3z"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', scale: '<path d="M12 4v16M6 20h12M5 8h14M5 8l-2.5 6h5zM19 8l-2.5 6h5z"/>',
+    flag: '<path d="M6 21V4h10l-1.5 3.5L16 11H6"/>', book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5"/>',
+    db: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+    pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>', grid: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+    sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+    gavel: '<path d="M14 4l6 6M11 7l6 6M4 20l7-7M9 9l6 6"/>', layers: '<path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4"/>',
+    check: '<path d="M20 6L9 17l-5-5"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>'
+  };
+  var ICONMAP = [["tier 1", "shield"], ["tier 2", "layers"], ["capital", "shield"], ["risk-weight", "scale"], ["rwa", "scale"], ["exposure", "scale"],
+    ["review", "flag"], ["exception", "flag"], ["judgement", "gavel"], ["rule", "gavel"], ["rbi", "book"], ["knowledge", "book"], ["document", "book"],
+    ["data", "db"], ["valid", "check"], ["check", "check"], ["activity", "pulse"], ["trail", "clock"], ["timeline", "clock"], ["heat", "grid"],
+    ["what-if", "sliders"], ["scenario", "sliders"], ["dial", "sliders"], ["sensitiv", "sliders"], ["analytic", "chart"], ["bridge", "chart"],
+    ["ratio", "chart"], ["leverage", "scale"], ["basel", "layers"], ["deal", "scale"], ["formula", "chart"], ["mix", "chart"]];
+  function cardTools(root) {
+    root.querySelectorAll(".card > .hd, .dark > .hd").forEach(function (hd) {
+      if (hd.dataset.tools) return; hd.dataset.tools = "1";
+      var t = hd.querySelector(".t"); if (!t) return;
+      var name = t.textContent.toLowerCase(), key = "spark";
+      for (var i = 0; i < ICONMAP.length; i++) if (name.indexOf(ICONMAP[i][0]) >= 0) { key = ICONMAP[i][1]; break; }
+      var ic = document.createElement("span"); ic.className = "cico";
+      ic.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + ICONS[key] + "</svg>";
+      var left = hd.firstElementChild; if (left) { left.classList.add("hdl"); left.insertBefore(ic, left.firstChild); }
+      var card = hd.parentElement;
+      if (card.classList.contains("tile") || card.classList.contains("scene-card")) return;
+      var xb = document.createElement("button"); xb.className = "xbtn"; xb.title = "Expand"; xb.innerHTML = "\u2922";
+      xb.addEventListener("click", function (e) { e.stopPropagation(); expandCard(card); });
+      hd.appendChild(xb);
+    });
+  }
+  function expandCard(card) {
+    var clone = card.cloneNode(true);
+    clone.querySelectorAll(".xbtn").forEach(function (x) { x.remove(); });
+    clone.querySelectorAll("[data-wired]").forEach(function (x) { x.removeAttribute("data-wired"); });
+    var root = document.getElementById("cc"); lastY = card.getBoundingClientRect().top + window.scrollY + 140;
+    var pn = panelAt("wide", '<button class="ov-x" title="Close (Esc)">\u00d7</button>' + clone.innerHTML);
+    pn.querySelector(".ov-x").addEventListener("click", function () { closeDrill(root); });
+    wireTables(pn); wireTabs(pn); countUps(pn); setHeight();
+  }
+  function wireTabs(scope) {
+    scope.querySelectorAll("[data-tabs], .ov-panel").forEach(function (box) {
+      box.querySelectorAll("[data-tab]").forEach(function (b) {
+        if (b.dataset.tw) return; b.dataset.tw = "1";
+        b.addEventListener("click", function () {
+          box.querySelectorAll("[data-tab]").forEach(function (x) { x.classList.toggle("on", x === b); });
+          box.querySelectorAll("[data-pane]").forEach(function (p) { p.classList.toggle("on", p.dataset.pane === b.dataset.tab); });
+          setHeight();
+        });
+      });
+    });
+  }
+  document.addEventListener("keydown", function (e) {
+    var typing = /INPUT|TEXTAREA/.test((document.activeElement || {}).tagName || "");
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette(); return; }
+    if (typing) return;
+    if (e.key === "?") openHelp();
+    else if (e.key === "t" || e.key === "T") toggleTheme();
+    else if (e.key === "d" || e.key === "D") toggleDensity();
+    else if (e.key === "/") { var q = document.getElementById("q"); if (q) { e.preventDefault(); q.focus(); } }
+  });
+
+  function init() {
+    var root = document.getElementById("cc");
+    if (!root) return;
+    root.dataset.theme = theme;
+    countUps(root);
+
+    /* live clock */
+    var clock = root.querySelector("#clock");
+    if (clockTimer) clearInterval(clockTimer);
+    var tick = function () { if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
+    tick(); clockTimer = setInterval(tick, 1000);
+
+    /* day / night */
+    var tb = root.querySelector("#theme");
+    applyTheme();
+    if (tb) tb.addEventListener("click", toggleTheme);
+
+    /* alerts menu */
+    var bell = root.querySelector("#bell"), menu = root.querySelector("#bellmenu");
+    if (bell && menu) {
+      bell.addEventListener("click", function (e) { e.stopPropagation(); menu.classList.toggle("open"); });
+      document.addEventListener("click", function (e) { if (!menu.contains(e.target)) menu.classList.remove("open"); });
+    }
+
+    /* search: live filter + Enter asks the agent */
+    var q = root.querySelector("#q"), qc = root.querySelector("#qcount");
+    var items = Array.prototype.slice.call(root.querySelectorAll("[data-search]"));
+    if (q) {
+      q.addEventListener("input", function () {
+        var t = q.value.trim().toLowerCase(), n = 0;
+        items.forEach(function (el) {
+          el.classList.remove("dim", "hit");
+          if (!t) return;
+          var hay = ((el.dataset.search || "") + " " + el.textContent).toLowerCase();
+          if (hay.indexOf(t) >= 0) { n++; if (el.tagName === "TR" || el.classList.contains("chk") || el.classList.contains("cite")) el.classList.add("hit"); }
+          else el.classList.add("dim");
+        });
+        if (qc) qc.textContent = t ? n + (n === 1 ? " match" : " matches") + " · Enter to ask" : "";
+      });
+      q.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && q.value.trim()) { emit({ type: "ask", q: q.value.trim() }); }
+        if (e.key === "Escape") { q.value = ""; q.dispatchEvent(new Event("input")); q.blur(); }
+      });
+    }
+
+
+    /* navigation to other pages */
+    root.addEventListener("click", function (e) {
+      var n = e.target.closest("[data-nav]");
+      if (n && !e.target.closest("[data-filter]") && !e.target.closest("#sortbtn")) emit({ type: "nav", page: n.dataset.nav });
+    });
+
+    /* tabs */
+    wireTabs(root);
+
+    /* review queue: filters + sort */
+    var body = root.querySelector("#rqb"), rqn = root.querySelector("#rqn"), filt = "all";
+    var expanded = false, more = root.querySelector("#rqmore");
+    var applyF = function () {
+      var vis = 0, shown = 0;
+      Array.prototype.forEach.call(body ? body.querySelectorAll("tr[data-sev]") : [], function (tr) {
+        var match = filt === "all" || tr.dataset.sev === filt || tr.dataset.cat === filt;
+        if (match) vis++;
+        var show = match && (filt !== "all" || expanded || shown < 8);
+        tr.style.display = show ? "" : "none"; if (show) shown++;
+      });
+      if (rqn) rqn.textContent = vis;
+      if (more) { more.style.display = (filt === "all" && vis > 8) ? "" : "none";
+                  more.textContent = expanded ? "Show top 8" : "Show all " + vis + " items"; }
+      setHeight();
+    };
+    if (more) more.addEventListener("click", function (e) { e.stopPropagation(); expanded = !expanded; applyF(); });
+    root.querySelectorAll("[data-filter]").forEach(function (b) {
+      b.addEventListener("click", function (e) { e.stopPropagation(); filt = b.dataset.filter;
+        root.querySelectorAll("[data-filter]").forEach(function (x) { x.classList.toggle("on", x === b); }); applyF(); });
+    });
+    var sb = root.querySelector("#sortbtn");
+    if (sb && body) sb.addEventListener("click", function (e) {
+      e.stopPropagation(); sortDesc = sortDesc === null ? true : !sortDesc; sb.classList.add("on");
+      var rows = Array.prototype.slice.call(body.querySelectorAll("tr[data-sev]"));
+      rows.sort(function (a, b) { var d = parseFloat(a.dataset.impact) - parseFloat(b.dataset.impact); return sortDesc ? -d : d; });
+      rows.forEach(function (r) { body.appendChild(r); });
+      applyF();
+    });
+    applyF();
+
+    /* live what-if slider (engine values pre-computed for every 5% step) */
+    var rw = root.querySelector("#rw");
+    if (rw && DATA.xs) {
+      var el = function (id) { return root.querySelector(id); };
+      var upd = function () {
+        var v = parseInt(rw.value, 10), i = DATA.xs.indexOf(v);
+        if (i < 0) return;
+        var c = DATA.crar[i], t = DATA.t1[i];
+        var px = (v - 50) / 100 * 100, py = (DATA.hi - c) / (DATA.hi - DATA.lo) * 100;
+        el("#wiCrar").textContent = c.toFixed(2) + "%";
+        el("#wiT1").textContent = t.toFixed(2) + "%";
+        el("#wiRw").textContent = v + "%";
+        el("#wiHead").textContent = (c - DATA.min >= 0 ? "+" : "") + (c - DATA.min).toFixed(2) + " pp";
+        var bps = (c - DATA.reported) * 100;
+        el("#wiDelta").textContent = (Math.abs(bps) < 0.5 ? "±0" : (bps > 0 ? "+" : "") + bps.toFixed(0)) + " bps vs reported";
+        var okv = c >= DATA.min && t >= DATA.min_t1;
+        var st = el("#wiStatus"); st.textContent = okv ? "Compliant" : "Breach"; st.style.color = okv ? "#2E8B5E" : "#D64560";
+        el("#wiDot").style.left = px + "%"; el("#wiDot").style.top = py + "%"; el("#wiVl").style.left = px + "%";
+        rw.style.setProperty("--p", px + "%");
+      };
+      rw.addEventListener("input", upd); upd();
+    }
+    /* generic: drill-down overlays, smart tables, scenario toggles */
+    root.addEventListener("click", function (e) {
+      var d = e.target.closest("[data-drill]");
+      if (!d || e.target.closest("button, a, input, .ov-panel")) return;
+      openDrill(root, d.dataset.drill, d);
+    });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrill(root); });
+    wireTables(root); wireSets(root); wireBasel(root); cardTools(root); applyDensity();
+    /* card-grid filters: data-cf="containerId|attribute|value" */
+    root.querySelectorAll("[data-cf]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var p = b.dataset.cf.split("|"), box = root.querySelector("#" + p[0]);
+        if (!box) return;
+        root.querySelectorAll('[data-cf^="' + p[0] + '|"]').forEach(function (x) { x.classList.toggle("on", x === b); });
+        Array.prototype.forEach.call(box.children, function (c) {
+          c.style.display = (p[2] === "all" || (c.dataset[p[1]] || "") === p[2]) ? "" : "none";
+        });
+        setHeight();
+      });
+    });
+    setTimeout(setHeight, 60); setTimeout(setHeight, 900);
+  }
+
+  if (window.ResizeObserver) new ResizeObserver(setHeight).observe(document.body);
+  window.addEventListener("load", setHeight);
+  /* announce readiness; repeat a few times until the first render arrives (harmless if already rendered) */
+  var tries = 0;
+  (function ready() { if (lastHtml !== null || tries++ > 8) return; send("streamlit:componentReady", { apiVersion: 1 });
+                      setTimeout(ready, 1000); })();
+})();
+</script></body></html>

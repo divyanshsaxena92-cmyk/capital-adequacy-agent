@@ -1,0 +1,557 @@
+{
+ "kb_version": "KB-2026.03.31-v2",
+ "notes": "Paraphrased, paragraph-level index of the RBI NBFC capital adequacy framework. Production build should ingest the full official PDF and keep this index as the citation map. Each passage carries the date from which its text was in force so historical runs use the rules that applied at the reporting date.",
+ "documents": {
+  "NBFC-CA-2025": {
+   "title": "Reserve Bank of India (Non-Banking Financial Companies - Prudential Norms on Capital Adequacy) Directions, 2025",
+   "ref": "RBI/DOR/2025-26/345, DOR.CAP.REC.264/21-01-002/2025-26 dated November 28, 2025",
+   "url": "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=12959",
+   "pdf": "https://rbidocs.rbi.org.in/rdocs/notification/PDFs/345MDAB71EF5B2D534D7B92C654742BDF9A77.PDF",
+   "amendments": [
+    {
+     "date": "2026-01-01",
+     "effective": "2026-04-01",
+     "change": "Para 18(1) risk-weight table: high-quality infrastructure project loans (75% / 50%)"
+    },
+    {
+     "date": "2026-03-10",
+     "effective": "2026-03-10",
+     "change": "Para 9(iii): conditions for including quarterly profits in owned fund"
+    },
+    {
+     "date": "2026-04-29",
+     "effective": "2026-07-01",
+     "change": "Para 3(6)(iv): Type I NBFC exclusion (via SBR amendment)"
+    },
+    {
+     "date": "2026-06-16",
+     "effective": "2026-06-16",
+     "change": "Para 18(2)(iv)(f): ECLGS 5.0 guaranteed exposures"
+    }
+   ]
+  },
+  "SCB-CA-2025": {
+   "title": "Reserve Bank of India (Commercial Banks - Prudential Norms on Capital Adequacy) Directions, 2025",
+   "ref": "RBI/DOR/2025-26/151",
+   "url": "https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13159",
+   "applicability_note": "Applies to commercial banks. The NBFC directions cross-refer to it only for credit risk mitigation (paras 167-176) and eligible rating agencies (paras 131-153)."
+  }
+ },
+ "passages": [
+  {
+   "id": "P6",
+   "doc": "NBFC-CA-2025",
+   "para": "6(2)-(4)",
+   "title": "Minimum capital ratios",
+   "text": "NBFC-Middle Layer and above must hold Tier 1 capital of at least 10% and CRAR of at least 15% of aggregate risk-weighted assets; Tier 2 may never exceed 100% of Tier 1. NBFC-Upper Layer must additionally hold CET1 of at least 9%. Gold-loan focused base-layer NBFCs need Tier 1 of 12% and CRAR of 15%.",
+   "tags": [
+    "minimum",
+    "crar",
+    "tier 1 ratio",
+    "cet1",
+    "layer",
+    "tier 2 limit"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P7",
+   "doc": "NBFC-CA-2025",
+   "para": "7",
+   "title": "Elements of CET1 capital (Upper Layer)",
+   "text": "CET1 comprises paid-up equity, share premium on equity issues, capital reserves from sale proceeds of assets, statutory reserves, revaluation reserves at a 55% discount if strict conditions are met, other disclosed free reserves, retained earnings at the end of the previous financial year (accumulated losses deducted) and current-year profit only if audited or limited-reviewed and reduced for average dividends; less regulatory deductions.",
+   "tags": [
+    "cet1",
+    "statutory reserve",
+    "share premium",
+    "equity",
+    "free reserves",
+    "retained earnings",
+    "revaluation"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P8-1",
+   "doc": "NBFC-CA-2025",
+   "para": "8(1)",
+   "title": "Deduction of goodwill, intangibles; ROU assets",
+   "text": "Goodwill and other intangibles are deducted from CET1, net of associated DTL that would be extinguished on impairment. A right-of-use asset under Ind AS 116 need not be deducted where the leased underlying asset is tangible.",
+   "tags": [
+    "intangible",
+    "goodwill",
+    "deduction",
+    "right of use",
+    "rou",
+    "lease"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P8-2",
+   "doc": "NBFC-CA-2025",
+   "para": "8(2)",
+   "title": "Deferred tax assets",
+   "text": "DTAs relating to accumulated losses, and other DTAs net of DTL, are deducted in full from CET1. Excess DTL is not added to capital. Netting is allowed only for the same tax authority where offsetting is permitted.",
+   "tags": [
+    "deferred tax",
+    "dta",
+    "dtl",
+    "deduction"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P8-3",
+   "doc": "NBFC-CA-2025",
+   "para": "8(3)",
+   "title": "Investments in other NBFCs and group companies",
+   "text": "Investments in shares of other NBFCs and exposures (shares, debentures, loans, deposits) to subsidiaries and group companies are deducted to the extent they exceed 10% of owned fund in aggregate, at the lower of cost or fair value.",
+   "tags": [
+    "investment",
+    "group companies",
+    "subsidiary",
+    "deduction",
+    "10 per cent"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P8-6",
+   "doc": "NBFC-CA-2025",
+   "para": "8(6)",
+   "title": "Defined benefit pension fund assets and liabilities",
+   "text": "Defined benefit liabilities on the balance sheet are fully recognised in CET1 (cannot be derecognised to raise capital); a defined benefit asset is deducted.",
+   "tags": [
+    "defined benefit",
+    "pension",
+    "gratuity",
+    "remeasurement",
+    "actuarial"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P9",
+   "doc": "NBFC-CA-2025",
+   "para": "9",
+   "title": "Owned fund",
+   "text": "Owned fund is paid-up equity, compulsorily convertible preference shares, free reserves (including eligible quarterly profits), share premium and capital reserves from asset sale proceeds (excluding revaluation reserves), reduced by accumulated losses, book value of intangible assets and deferred revenue expenditure. ROU assets on tangible underlying need not be deducted.",
+   "tags": [
+    "owned fund",
+    "free reserves",
+    "share premium",
+    "deferred revenue expenditure",
+    "intangible",
+    "prepaid",
+    "equity share capital"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P9-iii",
+   "doc": "NBFC-CA-2025",
+   "para": "9(iii)",
+   "title": "Quarterly profits in owned fund",
+   "text": "Quarterly profits may be counted only if statutory auditors have audited or limited-reviewed them, reduced by 0.25 x quarter number x average dividend of the last three years; current-year losses are deducted in full.",
+   "tags": [
+    "profit",
+    "quarterly",
+    "audit",
+    "limited review",
+    "dividend",
+    "retained earnings"
+   ],
+   "effective_from": "2026-03-10"
+  },
+  {
+   "id": "P10",
+   "doc": "NBFC-CA-2025",
+   "para": "10",
+   "title": "Tier 1 capital (Middle Layer)",
+   "text": "For NBFC-ML, Tier 1 is owned fund less investments in other NBFCs and group-company exposures exceeding 10% of owned fund, plus eligible perpetual debt up to 15% of prior-year Tier 1.",
+   "tags": [
+    "tier 1",
+    "middle layer",
+    "owned fund",
+    "pdi"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P11",
+   "doc": "NBFC-CA-2025",
+   "para": "11",
+   "title": "Tier 1 capital (Upper Layer)",
+   "text": "For NBFC-UL, Tier 1 is CET1 plus compulsorily convertible preference shares plus eligible perpetual debt up to 15% of prior-year Tier 1.",
+   "tags": [
+    "tier 1",
+    "upper layer",
+    "cet1",
+    "ccps",
+    "pdi"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P13",
+   "doc": "NBFC-CA-2025",
+   "para": "13",
+   "title": "Elements of Tier 2 capital",
+   "text": "Tier 2 includes non-convertible preference shares, revaluation reserves at a 55% discount, general provisions and loss reserves not attributable to specific identified losses up to 1.25% of RWA, hybrid debt, subordinated debt discounted by remaining maturity (100%/80%/60%/40%/20% for up to 1/2/3/4/5 years) and capped at 50% of Tier 1, and PDI in excess of the Tier 1 limit.",
+   "tags": [
+    "tier 2",
+    "general provisions",
+    "1.25",
+    "subordinated debt",
+    "preference shares",
+    "hybrid",
+    "revaluation"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P14",
+   "doc": "NBFC-CA-2025",
+   "para": "14",
+   "title": "Treatment of DTA and DTL",
+   "text": "DTA is treated as an intangible asset. DTA from accumulated losses and other DTA net of DTL are deducted from Tier 1. Excess DTL is neither adjusted nor added; DTL balances are not counted in Tier 1 or Tier 2.",
+   "tags": [
+    "deferred tax",
+    "dta",
+    "dtl",
+    "intangible",
+    "tier 1 deduction"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P15-2",
+   "doc": "NBFC-CA-2025",
+   "para": "15(2)",
+   "title": "Unrealised profit under co-lending",
+   "text": "Unrealised profit booked under co-lending arrangements must be deducted from CET1 / owned fund for capital adequacy until the underlying loans mature.",
+   "tags": [
+    "co-lending",
+    "unrealised profit",
+    "deduction"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P15-3",
+   "doc": "NBFC-CA-2025",
+   "para": "15(3)",
+   "title": "Default loss guarantee",
+   "text": "An NBFC that provides a default loss guarantee must deduct the full outstanding DLG amount from capital.",
+   "tags": [
+    "dlg",
+    "default loss guarantee",
+    "deduction",
+    "digital lending"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P16-1",
+   "doc": "NBFC-CA-2025",
+   "para": "16(1)-(2)",
+   "title": "Ind AS: unrealised fair value gains and losses",
+   "text": "Net unrealised fair-value gains on financial instruments are excluded from owned fund and CET1 while net losses are recognised, computed net of tax and separately for group/NBFC investments and other assets. Excluded gains on other assets are also reduced from RWA.",
+   "tags": [
+    "ind as",
+    "unrealised",
+    "fair value",
+    "oci",
+    "gains",
+    "losses"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P16-3",
+   "doc": "NBFC-CA-2025",
+   "para": "16(3)",
+   "title": "Ind AS: own credit risk and cash flow hedge reserve",
+   "text": "Unrealised gains or losses in equity from own credit risk and the cash flow hedge reserve are derecognised when determining owned fund and CET1.",
+   "tags": [
+    "cash flow hedge reserve",
+    "cfhr",
+    "own credit",
+    "derecognise",
+    "oci",
+    "hedging"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P16-4",
+   "doc": "NBFC-CA-2025",
+   "para": "16(4)",
+   "title": "Ind AS: hedge offset",
+   "text": "Unrealised gain or loss on a hedging derivative may be offset against the corresponding loss or gain on the hedged item recognised in capital; any residual net unrealised gain is excluded from regulatory capital, measured net of tax.",
+   "tags": [
+    "hedge",
+    "derivative",
+    "offset",
+    "cost of hedging",
+    "oci",
+    "unrealised"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P16-6",
+   "doc": "NBFC-CA-2025",
+   "para": "16(6)",
+   "title": "Ind AS: ECL in regulatory capital",
+   "text": "12-month ECL (Stage 1, no significant increase in credit risk) is counted as general provisions in Tier 2 within prescribed limits. Lifetime ECL is not counted in capital but is reduced from RWA.",
+   "tags": [
+    "ecl",
+    "stage 1",
+    "stage 2",
+    "stage 3",
+    "lifetime",
+    "general provisions",
+    "tier 2",
+    "impairment"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P16-8",
+   "doc": "NBFC-CA-2025",
+   "para": "16(8)",
+   "title": "Impairment reserve",
+   "text": "The impairment reserve is not counted in regulatory capital.",
+   "tags": [
+    "impairment reserve"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-1",
+   "doc": "NBFC-CA-2025",
+   "para": "18(1)",
+   "title": "On-balance-sheet risk weights",
+   "text": "Cash and bank balances including bank FDs and CDs: 0%. Retail consumer credit (excluding housing, education, vehicle, gold and microfinance/SHG loans) and credit card receivables: 125%. Other secured loans, inter-corporate loans, bills, other current assets and fixed assets: 100%. Loans to staff and loans fully secured by deposits held: 0%. TDS and advance tax net of provision: 0%. Other assets including ROU assets: 100%.",
+   "tags": [
+    "risk weight",
+    "cash",
+    "bank",
+    "consumer credit",
+    "125",
+    "credit card",
+    "receivables",
+    "fixed assets",
+    "tds",
+    "advance tax",
+    "rou",
+    "other assets",
+    "loans"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-1-infra",
+   "doc": "NBFC-CA-2025",
+   "para": "18(1)(2)(e)",
+   "title": "High-quality infrastructure loans",
+   "text": "Loans to high-quality infrastructure projects attract 75% after 2% repayment of sanctioned debt and 50% after 5%.",
+   "tags": [
+    "infrastructure",
+    "risk weight"
+   ],
+   "effective_from": "2026-04-01"
+  },
+  {
+   "id": "P18-2",
+   "doc": "NBFC-CA-2025",
+   "para": "18(2)",
+   "title": "RWA computation adjustments",
+   "text": "Assets may be netted only for provisions for depreciation or bad and doubtful debts. Any asset already deducted from owned fund carries 0% risk weight. Cash margins and security deposits held as collateral with set-off rights are netted from the borrower exposure.",
+   "tags": [
+    "netting",
+    "provisions",
+    "deducted asset",
+    "zero risk weight",
+    "double count",
+    "prepaid",
+    "dta"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-3",
+   "doc": "NBFC-CA-2025",
+   "para": "18(3)",
+   "title": "Off-balance-sheet items and counterparty risk weights",
+   "text": "Off-balance-sheet notionals are converted to credit equivalents using a CCF or the current exposure method, then weighted at 0% for central/state government, 20% for banks and 100% for others.",
+   "tags": [
+    "off balance sheet",
+    "counterparty",
+    "bank",
+    "20",
+    "credit equivalent",
+    "derivative"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-4",
+   "doc": "NBFC-CA-2025",
+   "para": "18(4)-(5)",
+   "title": "Non-market off-balance-sheet CCFs",
+   "text": "Guarantees 100%, underwriting 50%, commitments up to one year 20%, over one year 50%, unconditionally cancellable commitments 0%, other contingent liabilities 50%. Undrawn exposure is the maximum unused portion that could be drawn.",
+   "tags": [
+    "ccf",
+    "undrawn",
+    "commitments",
+    "guarantees",
+    "credit lines",
+    "contingent",
+    "off balance sheet"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-7",
+   "doc": "NBFC-CA-2025",
+   "para": "18(7)",
+   "title": "Market-related off-balance-sheet items",
+   "text": "All OTC derivatives must be included. Foreign exchange contracts include cross-currency swaps and cross-currency interest rate swaps. Exchange-traded contracts with daily margining are exempt; exposures to CCPs carry zero exposure value.",
+   "tags": [
+    "derivative",
+    "cross currency swap",
+    "foreign exchange",
+    "otc",
+    "ccp"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-8",
+   "doc": "NBFC-CA-2025",
+   "para": "18(8)",
+   "title": "Current Exposure Method",
+   "text": "Credit equivalent = current exposure (gross positive MTM per counterparty, no netting of positive and negative values) + PFE. PFE = notional x add-on by residual maturity: interest rate 0.5% / 1% / 3% and exchange rate and gold 2% / 10% / 15% for up to 1 year / over 1 to 5 years / over 5 years. Contracts with multiple principal exchanges multiply the add-on by remaining payments; effective notional is used where leveraged.",
+   "tags": [
+    "cem",
+    "current exposure",
+    "replacement cost",
+    "pfe",
+    "add-on",
+    "notional",
+    "residual maturity",
+    "derivative"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "P18-9",
+   "doc": "NBFC-CA-2025",
+   "para": "18(9)",
+   "title": "Bilateral netting recognition",
+   "text": "Netting is recognised only with a legally enforceable netting agreement creating a single legal obligation, supported by written reasoned legal opinions; walkaway clauses disqualify netting.",
+   "tags": [
+    "netting",
+    "legal opinion",
+    "isda",
+    "derivative"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-MIN",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "Basel III minimum capital ratios (banks)",
+   "text": "Scheduled commercial banks maintain, on an ongoing basis and excluding buffers, minimum Common Equity Tier 1 of 5.5%, Tier 1 of 7% and total capital (CRAR) of 9% of risk-weighted assets - above the global Basel III floors of 4.5%, 6% and 8%.",
+   "tags": [
+    "basel iii",
+    "cet1",
+    "tier 1",
+    "crar",
+    "minimum",
+    "bank"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-CCB",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "Capital conservation buffer",
+   "text": "A capital conservation buffer of 2.5% of risk-weighted assets, met with CET1, sits above the minimum, taking the effective CET1, Tier 1 and total capital floors to 8%, 9.5% and 11.5%. A bank whose CET1 falls into the buffer must restrict distributions such as dividends and bonuses in proportion to the shortfall.",
+   "tags": [
+    "basel iii",
+    "capital conservation buffer",
+    "ccb",
+    "cet1",
+    "distributions",
+    "dividend"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-CCYB",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "Countercyclical capital buffer",
+   "text": "A countercyclical capital buffer of 0 to 2.5% of risk-weighted assets, met with CET1, applies when activated by the Reserve Bank in periods of excessive credit growth.",
+   "tags": [
+    "basel iii",
+    "countercyclical",
+    "ccyb",
+    "buffer"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-DSIB",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "D-SIB additional CET1",
+   "text": "Domestic systemically important banks hold additional CET1 of 0.20% to 0.80% of risk-weighted assets according to their bucket; the list released in December 2025 places SBI at 0.80%, HDFC Bank at 0.40% and ICICI Bank at 0.20%.",
+   "tags": [
+    "basel iii",
+    "d-sib",
+    "dsib",
+    "systemically important",
+    "surcharge"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-LEV",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "Leverage ratio",
+   "text": "The leverage ratio is Tier 1 capital divided by the exposure measure - on-balance-sheet, derivative and off-balance-sheet exposures without risk weighting. The minimum is 4% for domestic systemically important banks and 3.5% for other banks (global floor 3%).",
+   "tags": [
+    "basel iii",
+    "leverage ratio",
+    "exposure measure",
+    "tier 1"
+   ],
+   "effective_from": "2025-11-28"
+  },
+  {
+   "id": "B3-T2",
+   "doc": "SCB-CA-2025",
+   "para": "summary",
+   "title": "Capital components and Pillar 1 coverage",
+   "text": "CET1 is common equity and disclosed reserves less regulatory deductions; Additional Tier 1 instruments must be perpetual and loss-absorbing; general provisions count in Tier 2 up to 1.25% of credit risk-weighted assets. Pillar 1 risk-weighted assets cover credit, market and operational risk.",
+   "tags": [
+    "basel iii",
+    "at1",
+    "tier 2",
+    "general provisions",
+    "market risk",
+    "operational risk",
+    "pillar 1"
+   ],
+   "effective_from": "2025-11-28"
+  }
+ ]
+}

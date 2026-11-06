@@ -1,0 +1,51 @@
+# RBI documents the knowledge base downloads ("Update from RBI" in the app, or:
+#   python -m capital_agent.rag_store refresh).
+#
+# How dates work: the brain reads them from the text itself ("applicable from ...", "with immediate effect",
+# "Updated as on ...", amendments referenced inside consolidated text). effective_from below is only a fallback.
+# A run uses the text in force on its REPORTING DATE - later RBI changes are kept but not applied to that run.
+#
+# Titles are RBI's official names. The RBI reference (e.g. RBI/DOR/2025-26/345), circular number and official
+# title are also read from each downloaded document and shown in the app; the id is only an internal key.
+# Kinds are detected automatically: base / consolidated / amendment / draft. Drafts are never used.
+# New RBI notices are discovered by the RBI watcher (official RSS feeds) - index them from the RBI library page.
+# If downloads are blocked on your network: save the PDF in a browser and drop it in regulatory_kb/library/.
+sources:
+  - id: NBFC-CA-2025
+    title: Reserve Bank of India (Non-Banking Financial Companies – Prudential Norms on Capital Adequacy) Directions, 2025
+    ref_no: RBI/DOR/2025-26/345
+    url: https://rbidocs.rbi.org.in/rdocs/notification/PDFs/345MDAB71EF5B2D534D7B92C654742BDF9A77.PDF
+    fallback_url: https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=12959
+    type: pdf
+    framework: NBFC
+    issued: '2025-11-28'
+    effective_from: '2025-11-28'
+    enabled: true
+  - id: NBFC-CA-2026-AMD1
+    title: Reserve Bank of India (Non-Banking Financial Companies – Prudential Norms on Capital Adequacy) Amendment Directions, 2026
+    subject: risk weights for high-quality infrastructure loans
+    url: https://rbidocs.rbi.org.in/rdocs/notification/PDFs/NT1685150F71B60FB49C9B8EA36FC9D82ED1C.PDF
+    type: pdf
+    framework: NBFC
+    issued: '2026-01-01'
+    enabled: true          # text says "applicable from April 1, 2026" - detected automatically
+  - id: NBFC-CA-2026-AMD3
+    title: Reserve Bank of India (Non-Banking Financial Companies – Prudential Norms on Capital Adequacy) Third Amendment Directions, 2026
+    subject: 0% risk weight for ECLGS 5.0 guaranteed exposures
+    url: https://www.rbi.org.in/Scripts/BS_CircularIndexDisplay.aspx?Id=13507
+    type: html             # notification page; the brain follows it to the official PDF
+    framework: NBFC
+    issued: '2026-06-16'
+    enabled: true
+  # Second Amendment Directions, 2026 (10 Mar 2026, quarterly profits in owned fund): add its URL here, or index it
+  # from the RBI watcher when it appears in the feed, or drop the PDF in the library folder.
+  - id: SCB-CA-2025
+    title: Reserve Bank of India (Commercial Banks – Prudential Norms on Capital Adequacy) Directions, 2025
+    subject: Basel III capital framework for commercial banks
+    url: https://rbidocs.rbi.org.in/rdocs/notification/PDFs/151MD.pdf
+    fallback_url: https://www.rbi.org.in/Scripts/BS_ViewMasDirections.aspx?id=13159
+    type: pdf
+    framework: BANK
+    issued: '2025-11-28'
+    effective_from: '2025-11-28'
+    enabled: true
