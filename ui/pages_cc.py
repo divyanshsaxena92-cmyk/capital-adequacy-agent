@@ -211,11 +211,11 @@ def rwa(run):
     body += card("Exposures", "Click a row for the rule, citation and reasoning",
                  table("rw", [("Exposure", "txt", ""), ("Exposure ₹ L", "num", "r"), ("Weight", "txt", ""), ("RWA ₹ L", "num", "r"),
                               ("Share", "num", "r"), ("Rule", "txt", ""), ("Confidence", "num", "")], rows, [("rw", wopts)]), "c12", d=.42)
-    tpls += drill("loans", "Loan book", "The dominant risk driver", _cls_detail(next(x[4] for x in lines if x[0] == "Loans"), run))
-    tpls += drill("rwrev", "Weights under review", "Applied on the maker's basis until an SME decides",
+    tpls.append(drill("loans", "Loan book", "The dominant risk driver", _cls_detail(next(x[4] for x in lines if x[0] == "Loans"), run)))
+    tpls.append(drill("rwrev", "Weights under review", "Applied on the maker's basis until an SME decides",
                   "".join(f'<div class="ov-q"><b>{escape(x[0])}</b> · weight {x[2]:.0%} · {escape(x[4].cls.rule_id or "")}</div>' for x in rev) or
-                  '<div class="ov-p">None.</div>')
-    return page("Risk-weighted assets", _date(run), body, tpls), {}
+                  '<div class="ov-p">None.</div>'))
+    return page("Risk-weighted assets", _date(run), body, "".join(tpls)), {}
 
 
 # ------------------------------------------------------------------ Derivatives

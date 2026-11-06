@@ -249,5 +249,7 @@ def tornado(items: list[tuple[str, float, str]]) -> str:
     return '<div class="tor">' + "".join(rows) + "</div>"
 
 
-def page(title: str, subtitle: str, body: str, templates: str = "") -> str:
+def page(title: str, subtitle: str, body: str, templates="") -> str:
+    if not isinstance(templates, str):                 # a list of detail panels -> join (never print a Python list)
+        templates = "".join(templates)
     return CSS + f'<div id="cc" data-theme="light">{topbar(title, subtitle)}<main class="g">{body}</main>{templates}</div>'

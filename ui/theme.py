@@ -138,10 +138,33 @@ DARK_CSS = """
 """
 
 
+LIGHT_CSS = """
+<style>
+/* Day theme, explicit: readable even if Streamlit itself runs in dark mode (missing config.toml or the visitor's
+   system preference). */
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stHeader"], [data-testid="stBottom"] > div
+  { background: #FFFFFF !important; color: #1E1E24 !important; }
+[data-testid="stSidebar"] { background: linear-gradient(180deg, #FBFAFE 0%, #F6F2FB 100%) !important; }
+[data-testid="stSidebar"] *, [data-testid="stSidebarNav"] a span, [data-testid="stSidebarNavLink"] span,
+.stMarkdown, .stMarkdown p, .stMarkdown li, label, [data-testid="stWidgetLabel"] p, h1, h2, h3, h4
+  { color: #1E1E24 !important; }
+[data-testid="stNavSectionHeader"], [data-testid="stNavSectionHeader"] *, [data-testid="stCaptionContainer"], .stCaption
+  { color: #6B6878 !important; }
+[data-testid="stSidebar"] svg { fill: currentColor; }
+[data-baseweb="input"], [data-baseweb="base-input"], [data-baseweb="select"] > div, textarea, input
+  { background: #FFFFFF !important; color: #1E1E24 !important; }
+[data-testid="stExpander"] details, [data-testid="stFileUploaderDropzone"] { background: #FFFFFF !important; }
+.stButton > button:not([kind="primary"]), .stDownloadButton > button { background: #FFFFFF !important; color: #1E1E24 !important; }
+</style>
+"""
+
+
 def inject(st):
     st.markdown(CSS, unsafe_allow_html=True)
     if st.session_state.get("theme") == "dark":
         st.markdown(DARK_CSS, unsafe_allow_html=True)
+    else:
+        st.markdown(LIGHT_CSS, unsafe_allow_html=True)
 
 
 def band(st, title: str, subtitle: str, chips: list[tuple[str, str]]):
