@@ -7,6 +7,7 @@ from __future__ import annotations
 from openpyxl import load_workbook
 
 from capital_agent.ingest import ingest
+from capital_agent.framework import profile_for_dataset, preflight_diagnostics
 
 # (pattern used by Dataset.find, section, human name, required?)
 REQUIRED_BS_ITEMS = [
@@ -32,6 +33,8 @@ SHEET_ROLES = [
     ("rwa_inputs", "Maker RWA schedule (Item_ID, Asset_Class, Risk_Weight ...)", False),
     ("expected_output", "Benchmark values (Metric, Expected_Value)", False),
     ("maker_exceptions", "Maker exception list (Exception_ID, Issue, Severity)", False),
+    ("market_inputs", "Commercial-bank market-risk RWA schedule (Item_ID, Market_Risk_RWA)", False),
+    ("operational_inputs", "Commercial-bank operational-risk schedule (Item_ID, Operational_Risk_RWA)", False),
 ]
 
 
@@ -51,6 +54,7 @@ def uncached_formulas(path: str, sheet: str) -> int:
 
 def run(path: str) -> dict:
     ds = ingest(path)
+    profile = profile_for_dataset(ds)
     roles = [{"Sheet role": r, "Expected": d, "Found as": ds.sheet_map.get(r, "-"),
               "Status": "OK" if r in ds.sheet_map else ("MISSING" if req else "optional - absent")}
              for r, d, req in SHEET_ROLES]
@@ -71,5 +75,7 @@ def run(path: str) -> dict:
         blocking.append("No presentation balance sheet found (cell A1 should read 'Balance Sheet as at <date>').")
     if ds.reporting_date is None:
         blocking.append("Reporting date not found.")
+    diagnostics = preflight_diagnostics(ds, profile)
+    blocking.extend(diagnostics)
     return {"ds": ds, "roles": roles, "items": items, "blocking": blocking, "log": ds.ingestion_log,
-            "large_sheets": ds.large_sheets}
+            "large_sheets": ds.large_sheets, "profile": profile, "diagnostics": diagnostics}

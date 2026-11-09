@@ -24,6 +24,8 @@ SHEET_SIGNATURES = {
     "maker_rules": {"rule_id", "capital_area", "calculation_logic"},
     "expected_output": {"metric", "expected_value"},
     "maker_exceptions": {"exception_id", "issue", "severity"},
+    "market_inputs": {"item_id", "market_risk_rwa"},
+    "operational_inputs": {"item_id", "operational_risk_rwa"},
 }
 
 MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
@@ -65,6 +67,8 @@ class Dataset:
     maker_rules: list = field(default_factory=list)
     expected_output: list = field(default_factory=list)
     maker_exceptions: list = field(default_factory=list)
+    market_inputs: list = field(default_factory=list)
+    operational_inputs: list = field(default_factory=list)
     bs_inputs: list = field(default_factory=list)
     raw_text: str = ""
     ingestion_log: list = field(default_factory=list)

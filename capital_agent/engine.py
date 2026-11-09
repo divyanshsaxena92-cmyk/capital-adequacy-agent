@@ -129,12 +129,13 @@ class CapitalResult:
 
 
 def compute_capital(capital_lines: list[CapitalLine], rwa_lines: list[RWALine], cem: CEMResult,
-                    gp_cap_rate: float, minimums: dict) -> CapitalResult:
+                    gp_cap_rate: float, minimums: dict, market_rwa: float = 0.0,
+                    operational_rwa: float = 0.0) -> CapitalResult:
     tier1 = sum(l.tier1_effect for l in capital_lines)
     gp_gross = sum(abs(l.amount) for l in capital_lines if l.treatment == "T2_GENERAL_PROVISION")
     tier2_other = sum(abs(l.amount) for l in capital_lines if l.treatment == "T2_INCLUDE")
     rwa_bs = sum(l.rwa for l in rwa_lines)
-    total_rwa = rwa_bs + cem.rwa
+    total_rwa = rwa_bs + cem.rwa + market_rwa + operational_rwa
     gp_cap = gp_cap_rate * total_rwa                      # para 13(iii)
     gp_elig = min(gp_gross, gp_cap)
     tier2 = min(gp_elig + tier2_other, max(tier1, 0.0))  # para 6(3): Tier 2 <= 100% of Tier 1

@@ -24,6 +24,7 @@ from .ingest import Dataset, SourceValue, ingest, norm
 from .knowledge import KnowledgeBase, RuleLibrary
 from .validate import _num, source_checks, Check
 from .security import LOCAL_ONLY_POLICY, enforce_local_only
+from .framework import profile_for_dataset, preflight_diagnostics
 
 SEV_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 TOL = 0.01
@@ -96,6 +97,8 @@ class Run:
         self.rules_path = rules_path or os.path.join(base_dir, "rules", "rule_library_v1.0.yaml")
         self.rag_db = rag_db
         self.loan_tape = loan_tape          # summary from capital_agent.bigdata.summarise_loan_tape
+        self.market_rwa = 0.0
+        self.operational_rwa = 0.0
         self.audit: list[AuditEntry] = []
         self.exceptions: list[ExceptionItem] = []
 
@@ -121,8 +124,8 @@ class Run:
         if self.rag_db and os.path.exists(self.rag_db):
             from .rag_store import RagStore
             rag = RagStore(self.rag_db)
-        bank_evidence = "banking regulation act" in norm(ds.raw_text)
-        self.entity_type = "BANK" if bank_evidence else ("NBFC" if "45-ic" in norm(ds.raw_text) else "UNKNOWN")
+        self.profile = profile_for_dataset(ds)
+        self.entity_type = self.profile.entity_type
         self.kb = KnowledgeBase(self.kb_path, ds.reporting_date, rag,
                                 ["NBFC"] if self.entity_type == "NBFC" else None)
         self.rbi_health, self.rbi_drift = None, []
@@ -143,13 +146,25 @@ class Run:
 
         # ---- entity profiling (which framework applies?)
         if self.entity_type == "BANK":
-            self.minimums = {"crar": 0.115, "tier1": 0.095}
-            framework = "SCB-CA-2025"
-            profile_basis = "commercial-bank evidence in presentation and capital schedules"
-        else:
+            self.minimums = dict(self.profile.minimums)
+            framework = self.profile.framework
+            profile_basis = "commercial-bank markers and capital/RWA schedules"
+        elif self.entity_type == "NBFC":
             self.minimums = self.rules.get("R-MIN-001")["minimums"][self.layer]
             framework = "NBFC-CA-2025"
-            profile_basis = "statutory reserve u/s 45-IC present" if self.entity_type == "NBFC" else "entity not identified"
+            profile_basis = "NBFC markers / statutory reserve evidence"
+        else:
+            self.minimums = {"crar": 0.0, "tier1": 0.0}
+            framework = self.profile.framework
+            profile_basis = "no explicit entity/framework evidence"
+        self.framework_diagnostics = preflight_diagnostics(ds, self.profile)
+        for diagnostic in self.framework_diagnostics:
+            self._add(ExceptionItem(
+                f"EXC-FRAMEWORK-{len(self.exceptions)+1}", "Framework evidence",
+                "Framework evidence is incomplete", diagnostic,
+                "Do not sign off until the missing evidence is supplied", "No silent assumption",
+                self.profile.framework, ", ".join(self.profile.required_evidence),
+                "No framework-specific adjustment applied", maker_ref="Preflight"), None, "High")
         self.log("1 Ingestion", "-", f"Entity profiled as {self.entity_type} ({profile_basis}); "
                  f"framework {framework}; layer assumed {self.layer}", rule="R-MIN-001", actor="Agent")
 
@@ -160,6 +175,17 @@ class Run:
 
         # ---- Stage 3: regulatory mapping (AI)
         self.agent = RegulatoryAgent(self.kb, self.rules, "rules", self.threshold, None)
+        self.market_rwa = self._schedule_total("market_inputs", "market_risk_rwa")
+        self.operational_rwa = self._schedule_total("operational_inputs", "operational_risk_rwa")
+        known_diagnostics = {e.issue for e in self.exceptions}
+        for diagnostic in self.framework_diagnostics:
+            if diagnostic not in known_diagnostics:
+                self._add(ExceptionItem(
+                    f"EXC-FRAMEWORK-{len(self.exceptions)+1}", "Framework evidence",
+                    "Framework schedule evidence is invalid", diagnostic,
+                    "Correct the schedule before sign-off", "No silent assumption",
+                    self.profile.framework, ", ".join(self.profile.required_evidence),
+                    "Invalid row excluded from RWA", maker_ref="Preflight"), None, "High")
         self.capital_items = self._build_capital_items()
         self.cap_applied = [self._apply_capital(self.agent.classify(it)) for it in self.capital_items]
         deducted = {a.cls.label for a in self.cap_applied if a.applied == "T1_DEDUCT"}
@@ -208,6 +234,23 @@ class Run:
         return self
 
     # ============================================================ item builders
+    def _schedule_total(self, role: str, value_key: str) -> float:
+        """Sum an explicit supplemental RWA schedule; missing schedules remain zero and are diagnosed."""
+        total = 0.0
+        for rec in getattr(self.ds, role, []):
+            value = _num(rec.get(value_key))
+            if value is None or value < 0:
+                self.framework_diagnostics.append(
+                    f"{role} row {rec.get('_row')} has no non-negative numeric {value_key}; row excluded from RWA."
+                )
+                continue
+            total += value
+            self.log("3 Mapping", f"{role}:{rec.get('item_id', rec.get('_row'))}",
+                     f"Included explicit {value_key} in total RWA",
+                     f"'{rec.get('_sheet')}'!{rec.get('_cells', {}).get(value_key)}",
+                     value, "R-BANK-RWA", "bank schedule", "RWA", value, "Engine")
+        return total
+
     def _build_capital_items(self) -> list[LineItem]:
         ds, items = self.ds, []
 
@@ -365,7 +408,7 @@ class Run:
                       ("security deposits", "security deposits"), ("payment gateway", "payment gateway"),
                       ("other advances", "other advances"),
                       ("fixed assets", "fixed assets"), ("investments", "investments"),
-                      ("loans", "loan portfolio")]
+                      ("loans", "loans"), ("loan portfolio", "loan portfolio")]
 
     def _apply_rwa(self, c: Classification) -> AppliedItem:
         nl, rec = norm(c.label), None
@@ -445,7 +488,8 @@ class Run:
                               self.rules.get("R-CCR-001")["add_on_table"], self.cem.replacement_cost,
                               self.cem.rc_source_ref, ov["ccr_rw"])
         rate = self.rules.get("R-T2-001")["cap"]["rate"]
-        return compute_capital(cap, rwa, cem, rate, self.minimums)
+        return compute_capital(cap, rwa, cem, rate, self.minimums,
+                               self.market_rwa, self.operational_rwa)
 
     def _log_calc(self, r, label):
         self.log("4 Calculation", "TIER1", f"{label}: Tier 1 = sum of included items less deductions", "", None,
@@ -820,6 +864,8 @@ class Run:
             "run_id": self.run_id, "started": self.started, "status": self.status, "mode": self.mode,
             "data_policy": LOCAL_ONLY_POLICY,
             "reporting_date": str(self.ds.reporting_date), "entity_type": self.entity_type, "layer": self.layer,
+            "framework": self.profile.framework, "market_rwa": self.market_rwa,
+            "operational_rwa": self.operational_rwa,
             "kb_version": self.kb.version, "rule_library": self.rules.version,
             "results": r.as_dict(), "agent_view": self.agent_view.as_dict(), "minimums": self.minimums,
             "benchmark": self.benchmark,

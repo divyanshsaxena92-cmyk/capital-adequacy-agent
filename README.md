@@ -17,6 +17,25 @@ python -m streamlit run app.py          # opens http://localhost:8501
 
 The sample client runs automatically. Upload a client workbook in the sidebar and click **Run agent**.
 
+## Supported workbook contract
+
+The agent profiles the entity from explicit workbook evidence before calculation. An NBFC workbook should identify
+the NBFC / section 45-IC context and state the reporting date, units, layer (ML or UL), owned-fund or Tier 1
+composition, RWA evidence, and any derivative deal schedule. Existing NBFC workbooks continue to use the
+NBFC-CA-2025 minimums (15% CRAR and 10% Tier 1 for ML; UL-specific CET1 evidence remains a review item).
+
+Commercial-bank workbooks should contain a presentation balance sheet plus capital and RWA schedules with explicit
+CET1/AT1/Tier 2 eligibility, and separate market-risk and operational-risk RWA schedules. Those supplemental
+schedules are added deterministically to total RWA. If either schedule is absent, preflight blocks management
+sign-off with an actionable diagnostic instead of treating the missing risk as zero. Instrument eligibility,
+counterparty treatment, and risk weights remain human-review items unless the workbook supplies sufficient
+evidence and an approved rule supports them.
+
+The supported calculation is deliberately narrower than a regulatory return: unsupported bank templates, missing
+capital composition, missing market or operational risk evidence, ambiguous risk weights, stale RBI text, and
+unclear entity/framework markers remain draft or blocked. The repository's bank and NBFC regression fixtures are
+synthetic and contain no client data.
+
 ## How it works without an LLM
 
 | Layer | What it does |
