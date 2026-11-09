@@ -36,6 +36,19 @@ capital composition, missing market or operational risk evidence, ambiguous risk
 unclear entity/framework markers remain draft or blocked. The repository's bank and NBFC regression fixtures are
 synthetic and contain no client data.
 
+Uploadable sanitized fixtures are included for end-to-end testing:
+
+| File | Purpose | Expected benchmark |
+|---|---|---|
+| `data/synthetic_commercial_bank.xlsx` | Commercial-bank balance sheet, CET1-style capital/RWA schedules, market-risk RWA, operational-risk RWA, and `Expected Output` sheet | Tier 1 `100.00`, Tier 2 `0.00`, Total RWA `660.00`, CRAR `15.151515%`, Tier 1 ratio `15.151515%` |
+| `data/synthetic_nbfc.xlsx` | NBFC section 45-IC marker, owned-fund-style schedules, loan RWA, and `Expected Output` sheet | Tier 1 `100.00`, Tier 2 `0.00`, Total RWA `725.00`, CRAR `13.793103%`, Tier 1 ratio `13.793103%` |
+
+Both files are intentionally synthetic and are expected to remain `DRAFT - PENDING SME REVIEW`: the bank fixture
+demonstrates deterministic market/operational RWA inclusion but does not constitute a complete Basel return, and
+the NBFC fixture is below the 15% CRAR / 10% Tier 1 minimums. RBI refresh/RAG documentation is not embedded in
+these workbooks; a clean management sign-off still requires the applicable RBI text in force for the reporting date,
+with RBI library freshness/coverage warnings resolved or explicitly accepted by the checker.
+
 ## How it works without an LLM
 
 | Layer | What it does |
