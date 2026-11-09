@@ -52,6 +52,31 @@ def source_checks(ds: Dataset) -> list[Check]:
              for r in tbl if r.get("reporting_date")}
     c.append(Check("V03", "Ingestion", "Reporting date consistent across input sheets",
                    "PASS" if len(dates) <= 1 else "FAIL", actual=", ".join(sorted(dates))))
+    c.append(Check("V00", "Ingestion", "Balance-sheet presentation sheet identified",
+                   "PASS" if "balance_sheet" in ds.sheet_map else "FAIL",
+                   actual=ds.sheet_map.get("balance_sheet", "missing")))
+    for role, severity, label in (
+        ("capital_inputs", "WARN", "Capital maker schedule present"),
+        ("rwa_inputs", "WARN", "RWA maker schedule present"),
+        ("derivative_inputs", "WARN", "Derivative schedule present (optional)"),
+    ):
+        present = role in ds.sheet_map
+        status = "PASS" if present else severity
+        detail = "Optional schedule absent; deterministic fallback and human review apply." if not present else ""
+        c.append(Check(f"V0-{role}", "Schema", label, status, actual=ds.sheet_map.get(role, "absent"), detail=detail))
+    c.append(Check("V21", "Schema", "No formulas in source workbook input cells",
+                   "WARN" if ds.formula_cells else "PASS",
+                   actual=", ".join(ds.formula_cells[:20]) or "none",
+                   detail="Formula cells are read as cached values only; recalculate and freeze source values before sign-off."
+                   if ds.formula_cells else "No formulas detected."))
+    c.append(Check("V22", "Schema", "Numeric input cells are parseable",
+                   "FAIL" if ds.malformed_cells else "PASS",
+                   actual=", ".join(ds.malformed_cells[:20]) or "none",
+                   detail="Malformed values are never silently coerced; affected classifications remain reviewable."))
+    c.append(Check("V23", "Schema", "Declared units are explicit",
+                   "PASS" if ds.units and ds.currency else "WARN",
+                   actual=f"{ds.currency or '?'} / {ds.units or 'unknown'}",
+                   detail="Amounts without explicit units are not safe for management sign-off."))
 
     # ---- balance sheet arithmetic
     fa = ["cash and cash equivalents", "bank balances other", "derivative financial", "trade receivables",

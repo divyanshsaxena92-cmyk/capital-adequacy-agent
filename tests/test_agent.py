@@ -19,6 +19,7 @@ from capital_agent.classifier import AUTO, REVIEW, Classification, LineItem, Reg
 from capital_agent.engine import CEMResult, CapitalLine, RWALine, add_on_factor, compute_capital  # noqa: E402
 from capital_agent.ingest import ingest  # noqa: E402
 from capital_agent.knowledge import KnowledgeBase, RuleLibrary  # noqa: E402
+from capital_agent.validate import source_checks  # noqa: E402
 
 DATA = os.path.join(HERE, "data", "sample_client_001.xlsx")
 KB = os.path.join(HERE, "regulatory_kb", "nbfc_capital_adequacy_2025.json")
@@ -170,6 +171,29 @@ class TestGuardrails(unittest.TestCase):
         self.assertIsNone(result.maker_treatment)
         self.assertIsNotNone(result.applied)
         self.assertIn("risk weight missing", result.basis)
+
+    def test_production_run_rejects_external_llm_modes(self):
+        with self.assertRaises(ValueError):
+            Run(DATA, HERE, mode="llm")
+
+    def test_preflight_reports_formula_and_malformed_cells(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inputs"
+        ws.append(["Item_ID", "Reporting_Date", "Capital_Category", "Line_Item", "Raw_Amount_INR_Lakhs"])
+        ws.append(["CAP001", ASOF, "Tier 1", "Equity share capital", "not-a-number"])
+        ws["E2"] = "=1+1"
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:
+            path = f.name
+        wb.save(path)
+        try:
+            ds = ingest(path)
+            checks = {c.check_id: c for c in source_checks(ds)}
+            self.assertEqual(checks["V22"].status, "FAIL")
+            self.assertEqual(checks["V21"].status, "WARN")
+            self.assertEqual(checks["V00"].status, "FAIL")
+        finally:
+            os.unlink(path)
 
 
 class TestVersioning(unittest.TestCase):

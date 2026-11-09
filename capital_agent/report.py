@@ -352,11 +352,12 @@ def build_pack(run, path: str):
     _title(ws, "Source-to-output audit trail", f"Run {run.run_id}. Source -> regulatory rule -> treatment -> output; "
            "actor shows Agent, Engine or Human.")
     hdr = ["#", "Stage", "Item", "Description", "Source", "Input", "Rule", "Citation", "Treatment / result", "Output",
-           "Actor"]
-    _header(ws, 4, hdr, [5, 14, 13, 70, 30, 14, 12, 26, 18, 16, 16])
+           "Actor", "Lineage", "Reconciliation"]
+    _header(ws, 4, hdr, [5, 14, 13, 70, 30, 14, 12, 26, 18, 16, 16, 14, 20])
     for i, e in enumerate(run.audit, start=5):
         _row(ws, i, [e.seq, e.stage, e.item_id, e.description, e.source_ref, e.input_value, e.rule_id, e.citation,
-                     e.treatment, e.output_value, e.actor], fmts={6: "#,##0.00####", 10: "#,##0.00####"})
+                     e.treatment, e.output_value, e.actor, e.lineage_status, e.reconciliation_status],
+             fmts={6: "#,##0.00####", 10: "#,##0.00####"})
 
     # ------------------------------------------------------------ Rule library
     ws = wb.create_sheet("Rule_Library")

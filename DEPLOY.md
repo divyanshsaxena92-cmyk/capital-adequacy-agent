@@ -30,6 +30,9 @@ cloud servers by RBI's website; the library folder always works.
 **Confidentiality**
 Community Cloud runs on servers outside Grant Thornton. Show the sample client only - viewer mode already blocks
 workbook uploads for visitors; as admin, do not upload real client files there. For client work use option B.
+The application enforces a local-only client-data boundary: production runs are rules-only, reject injected
+LLM clients, and never send workbook contents to RBI refreshes or any other network path. Do not weaken this
+boundary for a demo.
 
 ## Other options
 **A. Share from your laptop** (office network / VPN, while your laptop runs it): double-click `run_shared.bat`,
@@ -43,3 +46,13 @@ Ask IT for an intranet URL behind GT single sign-on, a backed-up volume for `/da
 ## Shared vs private
 - Shared: the RBI knowledge base and imported data (persistent on option B; reset on restart on Community Cloud).
 - Private per browser session: the uploaded client workbook, the run, decisions, chat, theme.
+
+## Management-demo controls
+
+1. Use the supplied sample workbook or a sanitized fixture for a screen share; never upload client data to Community Cloud.
+2. Show Validation before results: blocking failures (missing balance sheet, inconsistent dates, malformed numerics)
+   and warnings (missing optional maker/derivative schedules, formulas, unknown units) are intentionally distinct.
+3. Show the Calculation ledger and Audit trail. Every reported calculation row carries source/rule/citation lineage
+   and a benchmark/reconciliation state.
+4. Demonstrate the Exception queue: unresolved classifications, layer/framework assumptions, stale or curated-only
+   RBI text, and rule drift remain open until a named reviewer signs a decision.

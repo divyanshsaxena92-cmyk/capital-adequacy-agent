@@ -23,6 +23,7 @@ from .engine import CapitalLine, RWALine, compute_capital, compute_cem
 from .ingest import Dataset, SourceValue, ingest, norm
 from .knowledge import KnowledgeBase, RuleLibrary
 from .validate import _num, source_checks, Check
+from .security import LOCAL_ONLY_POLICY, enforce_local_only
 
 SEV_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 TOL = 0.01
@@ -76,6 +77,8 @@ class AuditEntry:
     treatment: str
     output_value: float | str | None
     actor: str
+    lineage_status: str = "UNVERIFIED"
+    reconciliation_status: str = "NOT_APPLICABLE"
 
 
 class Run:
@@ -86,7 +89,8 @@ class Run:
         self.run_id = "RUN-" + dt.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4].upper()
         self.started = dt.datetime.now().isoformat(timespec="seconds")
         self.input_path, self.base_dir, self.mode, self.layer = input_path, base_dir, mode, layer
-        self.decisions_path, self.threshold, self.llm_client = decisions_path, threshold, llm_client
+        enforce_local_only(mode, llm_client)
+        self.decisions_path, self.threshold, self.llm_client = decisions_path, threshold, None
         self.requested_framework = requested_framework
         self.kb_path = kb_path or os.path.join(base_dir, "regulatory_kb", "nbfc_capital_adequacy_2025.json")
         self.rules_path = rules_path or os.path.join(base_dir, "rules", "rule_library_v1.0.yaml")
@@ -97,7 +101,11 @@ class Run:
 
     # ----------------------------------------------------------------- audit
     def log(self, stage, item_id, desc, src="", inp=None, rule="", cite="", treat="", out=None, actor="Engine"):
-        self.audit.append(AuditEntry(len(self.audit) + 1, stage, item_id, desc, src, inp, rule, cite, treat, out, actor))
+        # Derived totals may not have one source cell; their rule and citation
+        # still provide the required evidence lineage.
+        lineage = "COMPLETE" if rule and cite else ("PARTIAL" if src or rule or cite else "NONE")
+        self.audit.append(AuditEntry(len(self.audit) + 1, stage, item_id, desc, src, inp, rule, cite, treat, out, actor,
+                                     lineage, "PENDING"))
 
     # ============================================================== pipeline
     def execute(self):
@@ -151,7 +159,7 @@ class Run:
             self.log("2 Validation", c.check_id, c.description, inp=c.expected, out=c.actual, treat=c.status)
 
         # ---- Stage 3: regulatory mapping (AI)
-        self.agent = RegulatoryAgent(self.kb, self.rules, self.mode, self.threshold, self.llm_client)
+        self.agent = RegulatoryAgent(self.kb, self.rules, "rules", self.threshold, None)
         self.capital_items = self._build_capital_items()
         self.cap_applied = [self._apply_capital(self.agent.classify(it)) for it in self.capital_items]
         deducted = {a.cls.label for a in self.cap_applied if a.applied == "T1_DEDUCT"}
@@ -186,6 +194,13 @@ class Run:
         # ---- Stage 8: controls
         self._benchmark()
         self.control_checks = self._controls()
+        for entry in self.audit:
+            if entry.stage == "4 Calculation":
+                entry.reconciliation_status = "BENCHMARK_PENDING"
+        if self.benchmark and all(b["status"] == "PASS" for b in self.benchmark):
+            for entry in self.audit:
+                if entry.stage == "4 Calculation":
+                    entry.reconciliation_status = "BENCHMARK_PASS"
         open_blocking = [e for e in self.exceptions if e.status == "OPEN" and SEV_RANK[e.severity] <= 2]
         self.status = ("DRAFT - PENDING SME REVIEW" if open_blocking else "READY FOR CHECKER SIGN-OFF")
         self.log("8 Controls", "-", f"Run status: {self.status}; return submission disabled (human approval required)",
@@ -197,6 +212,11 @@ class Run:
         ds, items = self.ds, []
 
         def add(sv: SourceValue, label=None, amount=None, ctx=None):
+            if sv is None:
+                label = label or "Missing capital source line"
+                items.append(LineItem(f"CAP-{len(items) + 1:02d}", label, amount or 0.0,
+                                      "MISSING", "capital", ctx or {}))
+                return
             items.append(LineItem(f"CAP-{len(items) + 1:02d}", label or sv.label, sv.amount if amount is None else amount,
                                   sv.ref, "capital", ctx or {}))
 
@@ -240,16 +260,17 @@ class Run:
             items.append(LineItem(f"RWA-{len(items) + 1:02d}", label, amount, ref, "asset", ctx or {}))
 
         cash, bank = ds.find("cash and cash equivalents"), ds.find("bank balances other")
-        add("Cash and bank balances", cash.amount + bank.amount, f"{cash.ref} + {bank.ref}")
+        add("Cash and bank balances", (cash.amount if cash else 0.0) + (bank.amount if bank else 0.0),
+            " + ".join(x.ref for x in (cash, bank) if x) or "MISSING")
         tr = ds.find("^trade receivables$")
-        add("Trade receivables", tr.amount, tr.ref)
+        add("Trade receivables", tr.amount if tr else 0.0, tr.ref if tr else "MISSING")
         for sv in ds.section_items("Note 10"):
             if "total" not in norm(sv.label):
                 add(sv.label, sv.amount, sv.ref)
         onfa, pre = ds.find("other non-financial assets"), ds.find("prepaid", "Note 14")
         pre_lbl = pre.label if pre else ""
-        add("Other non-financial assets (excl. prepaid expenses)", onfa.amount - (pre.amount if pre else 0),
-            f"{onfa.ref} - {pre.ref if pre else ''}")
+        add("Other non-financial assets (excl. prepaid expenses)", (onfa.amount if onfa else 0.0) - (pre.amount if pre else 0),
+            f"{onfa.ref if onfa else 'MISSING'} - {pre.ref if pre else ''}")
         if pre:
             add("Prepaid expenses", pre.amount, pre.ref, {"deducted_from_capital": pre_lbl in deducted_labels})
         fixed = [sv for pat in ("property, plant", "right of use") if (sv := ds.find(pat))]
@@ -260,12 +281,13 @@ class Run:
             if sv and abs(sv.amount) > TOL:
                 add(sv.label, sv.amount, sv.ref)
         loans, ecl = ds.find("^loans$"), ds.find("stage 1 - impairment", "Note 8")
+        loan_amount = loans.amount if loans else 0.0
         gross_up = abs(ecl.amount) if ecl else 0.0
-        add("Loans", loans.amount + gross_up, f"{loans.ref} + {ecl.ref if ecl else ''}",
-            {"net_loans": loans.amount, "stage1_ecl_gross_up": gross_up})
+        add("Loans", loan_amount + gross_up, f"{loans.ref if loans else 'MISSING'} + {ecl.ref if ecl else ''}",
+            {"net_loans": loan_amount, "stage1_ecl_gross_up": gross_up})
         self.log("3 Mapping", "RWA", "Loan exposure measured gross of Stage 1 ECL (counted in Tier 2; only specific "
-                 "provisions may be netted)", loans.ref, loans.amount, "R-RWA-007", "para 18(2)(i), 16(6)",
-                 "Gross-up", loans.amount + gross_up, "Engine")
+                 "provisions may be netted)", loans.ref if loans else "MISSING", loan_amount, "R-RWA-007", "para 18(2)(i), 16(6)",
+                 "Gross-up", loan_amount + gross_up, "Engine")
         dta = ds.find("deferred tax assets")
         if dta:
             add(dta.label, dta.amount, dta.ref, {"deducted_from_capital": dta.label in deducted_labels})
@@ -395,13 +417,14 @@ class Run:
         rc_sv = self.ds.find("derivative financial")
         rw = self.rules.get("R-CCR-002")["risk_weight"]
         cem = compute_cem(self.ds.derivative_inputs, self.ds.reporting_date, rule["add_on_table"],
-                          rc_sv.amount, rc_sv.ref, rw)
+                          rc_sv.amount if rc_sv else 0.0, rc_sv.ref if rc_sv else "MISSING", rw)
         for d in cem.deals:
             self.log("4 Calculation", d.item_id, f"{d.deal_id}: classified {d.contract_type} (two currencies); residual "
                      f"{d.residual_years:.2f}y => add-on {d.add_on:.1%}", d.source_ref, d.notional_lakhs, "R-CCR-001",
                      "para 18(7)(iii)(b), 18(8)(iii)", "PFE", d.pfe_lakhs, "Agent+Engine")
         self.log("4 Calculation", "CEM", "Replacement cost = gross positive MTM (balance-sheet derivative asset); no "
-                 "netting recognised", rc_sv.ref, rc_sv.amount, "R-CCR-001", "para 18(8)(ii)", "RC", cem.replacement_cost)
+                 "netting recognised", rc_sv.ref if rc_sv else "MISSING", rc_sv.amount if rc_sv else 0.0,
+                 "R-CCR-001", "para 18(8)(ii)", "RC", cem.replacement_cost)
         self.log("4 Calculation", "CEM", f"Counterparty risk weight {rw:.0%} (bank counterparty assumed)", "", cem.credit_equivalent,
                  "R-CCR-002", "para 18(3)(ii)", "RWA", cem.rwa)
         return cem
@@ -764,12 +787,13 @@ class Run:
         out.append(Check("C03", "Control", "Tier 2 <= 100% of Tier 1", "PASS" if r.tier2 <= r.tier1 + TOL else "FAIL",
                          round(r.tier1, 2), round(r.tier2, 2)))
         # asset coverage: every balance-sheet asset is risk-weighted, deducted (0%) or captured as derivative RC
-        loans = next(a for a in self.rwa_applied if a.cls.label == "Loans")
-        covered = sum(a.exposure for a in self.rwa_applied) - loans.cls.amount + self.ds.find("^loans$").amount \
-            + self.cem.replacement_cost
+        loans = next((a for a in self.rwa_applied if a.cls.label == "Loans"), None)
+        loan_sv, asset_sv = self.ds.find("^loans$"), self.ds.find("^total assets")
+        covered = sum(a.exposure for a in self.rwa_applied) - (loans.cls.amount if loans else 0.0) \
+            + (loan_sv.amount if loan_sv else 0.0) + self.cem.replacement_cost
         out.append(Check("C04", "Control", "All balance-sheet assets covered by RWA/deduction/CCR",
-                         "PASS" if abs(covered - self.ds.find("^total assets").amount) <= TOL else "FAIL",
-                         round(self.ds.find("^total assets").amount, 2), round(covered, 2)))
+                         "PASS" if asset_sv and abs(covered - asset_sv.amount) <= TOL else "FAIL",
+                         round(asset_sv.amount, 2) if asset_sv else None, round(covered, 2)))
         uncited = [a.cls.item_id for a in self.cap_applied + self.rwa_applied if not a.cls.citations]
         out.append(Check("C05", "Control", "Every classification carries a regulatory citation",
                          "PASS" if not uncited else "FAIL", actual=", ".join(uncited) or "all cited"))
@@ -778,6 +802,15 @@ class Run:
                          actual=f"{sum(b['status'] == 'PASS' for b in self.benchmark)}/{len(self.benchmark)} metrics"))
         out.append(Check("C07", "Control", "Source data unchanged (agent outputs are additive)", "PASS",
                          detail="Input workbook opened read-only; outputs written to a separate pack"))
+        out.append(Check("C08", "Control", "All calculation audit rows have source/rule/citation lineage",
+                         "PASS" if all(e.lineage_status == "COMPLETE" for e in self.audit if e.stage == "4 Calculation")
+                         else "WARN",
+                         actual=f"{sum(e.lineage_status == 'COMPLETE' for e in self.audit if e.stage == '4 Calculation')}/"
+                               f"{sum(e.stage == '4 Calculation' for e in self.audit)} complete"))
+        out.append(Check("C09", "Control", "RBI source is in force for the reporting date",
+                         "PASS" if self.rbi_health is None or self.rbi_health.get("verdict") == "ok" else "WARN",
+                         actual=self.rbi_health.get("verdict") if self.rbi_health else "curated KB only",
+                         detail="Curated-only or stale source text requires SME confirmation before sign-off."))
         return out
 
     # ============================================================ export
@@ -785,6 +818,7 @@ class Run:
         r = self.final
         return {
             "run_id": self.run_id, "started": self.started, "status": self.status, "mode": self.mode,
+            "data_policy": LOCAL_ONLY_POLICY,
             "reporting_date": str(self.ds.reporting_date), "entity_type": self.entity_type, "layer": self.layer,
             "kb_version": self.kb.version, "rule_library": self.rules.version,
             "results": r.as_dict(), "agent_view": self.agent_view.as_dict(), "minimums": self.minimums,

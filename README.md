@@ -3,7 +3,10 @@
 Computes Tier 1 / Tier 2 capital, risk-weighted assets and CRAR for an RBI-regulated entity, classifies every
 balance-sheet item under RBI's norms with a paragraph citation, and sends every judgement call to a human.
 
-**Runs fully offline. No LLM, no API key; client data never leaves the machine.**
+**Runs fully offline for client work. No LLM, no API key; client data never leaves the machine.**
+The production `Run` boundary rejects `mode="llm"`/`"hybrid"` and any injected LLM client. Network
+access is reserved for explicitly initiated RBI public-source refreshes; workbook values are never included
+in those requests. Direct classifier LLM tests are not a supported production path.
 
 ## Run it
 
@@ -32,6 +35,17 @@ Three routes, all on the **RBI library** page:
 3. **Upload** a single PDF.
 
 Curated summaries of the key paragraphs are pre-loaded, so search and the assistant work before any download.
+Curated-only, stale, future-dated, draft, or framework-mismatched sources are surfaced as review warnings and
+must not be treated as a clean management sign-off.
+
+### Management demo gate
+
+Before presenting a run, confirm the **Validation** page has explicit units, no malformed numeric cells,
+the required source sheet, and a visible status for optional/missing schedules. Use the **Audit trail** and
+**Calculation ledger** to show source cell -> approved rule -> treatment -> formula -> output. A run remains
+`DRAFT - PENDING SME REVIEW` when classifications, layer/entity framework, evidence, stale/curated RBI text,
+or rule drift require human action. Only a signed reviewer decision can change an exception outcome; source
+workbooks are read-only and output packs are additive.
 
 ## Pages
 

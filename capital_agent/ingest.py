@@ -69,6 +69,10 @@ class Dataset:
     raw_text: str = ""
     ingestion_log: list = field(default_factory=list)
     large_sheets: list = field(default_factory=list)   # big unrecognised sheets -> route to bigdata.DataStore
+    formula_cells: list = field(default_factory=list)
+    malformed_cells: list = field(default_factory=list)
+    sheet_rows: dict = field(default_factory=dict)
+    recognized_headers: dict = field(default_factory=dict)
 
     # -- lookups -----------------------------------------------------------
     def find(self, pattern: str, section: str | None = None) -> SourceValue | None:
@@ -107,7 +111,9 @@ def _detect_role(headers: set[str]) -> str | None:
 def _read_table(title: str, rows) -> list[dict]:
     """rows: iterable of cell tuples, first one is the header (works with read-only worksheets)."""
     rows = iter(rows)
-    header_cells = next(rows)
+    header_cells = next(rows, None)
+    if header_cells is None:
+        return []
     headers = [norm(c.value).replace(" ", "_") if c.value is not None else None for c in header_cells]
     out = []
     for i, r in enumerate(rows, start=2):
@@ -174,6 +180,7 @@ def ingest(path: str, large_rows: int = LARGE_ROWS) -> Dataset:
     """Streaming (read-only) load: small role sheets are parsed; big unrecognised sheets are only counted."""
     import itertools
     wb = load_workbook(path, data_only=True, read_only=True)
+    formula_wb = load_workbook(path, data_only=False, read_only=True)
     ds = Dataset(path=path)
     for ws in wb.worksheets:
         it = ws.iter_rows()
@@ -188,6 +195,7 @@ def ingest(path: str, large_rows: int = LARGE_ROWS) -> Dataset:
             ds.ingestion_log.append(f"'{ws.title}': presentation balance sheet; {len(ds.bs)} amounts parsed")
             continue
         headers = {norm(c.value).replace(" ", "_") for c in first if c.value is not None}
+        ds.sheet_rows[ws.title] = 1
         role = _detect_role(headers)
         if role is None:
             n = 1
@@ -203,9 +211,31 @@ def ingest(path: str, large_rows: int = LARGE_ROWS) -> Dataset:
                 ds.ingestion_log.append(f"'{ws.title}': role not recognised - skipped (flag for review)")
             continue
         ds.sheet_map[role] = ws.title
+        ds.recognized_headers[role] = sorted(headers)
         setattr(ds, role, _read_table(ws.title, rows))
+        ds.sheet_rows[ws.title] += len(getattr(ds, role))
         ds.ingestion_log.append(f"'{ws.title}': detected as {role} ({len(getattr(ds, role))} rows)")
+        numeric_headers = {h for h in headers if any(
+                token in h for token in ("amount", "value", "weight", "rwa", "notional", "rate", "capital"))}
+        for rec in getattr(ds, role):
+                for h in numeric_headers:
+                    value = rec.get(h)
+                    if value in (None, ""):
+                        continue
+                    if isinstance(value, bool):
+                        ds.malformed_cells.append(f"'{ws.title}'!{rec['_cells'].get(h)} ({h}: boolean)")
+                        continue
+                    try:
+                        float(str(value).replace(",", "").replace("%", "").replace("=", "").strip())
+                    except (TypeError, ValueError):
+                        ds.malformed_cells.append(f"'{ws.title}'!{rec['_cells'].get(h)} ({h}: {value!r})")
+    for ws in formula_wb.worksheets:
+        for row in ws.iter_rows():
+                for cell in row:
+                    if isinstance(cell.value, str) and cell.value.startswith("="):
+                        ds.formula_cells.append(f"'{ws.title}'!{cell.coordinate}")
     wb.close()
+    formula_wb.close()
     if ds.reporting_date is None:
         for rec in ds.capital_inputs + ds.bs_inputs:
             d = _to_date(rec.get("reporting_date"))
