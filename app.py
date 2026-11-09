@@ -25,6 +25,7 @@ from capital_agent.agent import Run  # noqa: E402
 from capital_agent.bigdata import DataStore  # noqa: E402
 from capital_agent.rag_store import RagStore  # noqa: E402
 from capital_agent.report import build_pack  # noqa: E402
+from capital_agent.security import deployment_safety_check  # noqa: E402
 from ui import preflight, registry, theme  # noqa: E402
 from ui.context import Ctx  # noqa: E402
 
@@ -37,6 +38,7 @@ LIBRARY = os.path.join(HERE, "regulatory_kb", "library")
 CURATED = os.path.join(HERE, "regulatory_kb", "nbfc_capital_adequacy_2025.json")
 TMP = os.path.join(tempfile.gettempdir(), "capital_agent_ui")
 os.makedirs(TMP, exist_ok=True)
+DEPLOYMENT = deployment_safety_check()
 
 st.set_page_config(page_title="Capital Adequacy Agent", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
@@ -116,11 +118,11 @@ with st.sidebar:
                 '<div class="gt-side-sub">Tier 1 · Tier 2 · RWA · CRAR under RBI prudential norms</div>',
                 unsafe_allow_html=True)
     from ui import access
-    if access.is_admin(st):
+    if access.is_admin(st) and DEPLOYMENT["client_uploads_allowed"]:
         upload = st.file_uploader("Client workbook (.xlsx)", type=["xlsx", "xlsm"])
     else:
         upload = None
-        st.caption("View-only: showing the sample client. Admins can upload workbooks.")
+        st.caption("View-only: showing synthetic fixtures. Client workbook uploads are disabled on Community Cloud.")
     input_path = _save_upload(upload, ".xlsx") if upload else SAMPLE
     st.caption(f"Using: **{upload.name if upload else 'sample client (CLIENT_001)'}**")
     with st.expander("Agent settings"):

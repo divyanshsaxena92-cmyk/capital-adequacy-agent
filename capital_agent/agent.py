@@ -86,7 +86,8 @@ class Run:
     def __init__(self, input_path: str, base_dir: str, mode: str = "rules", layer: str = "ML",
                  decisions_path: str | None = None, threshold: float = 0.80, llm_client=None,
                  requested_framework: str = "SCB-CA-2025", rules_path: str | None = None,
-                 kb_path: str | None = None, rag_db: str | None = None, loan_tape: dict | None = None):
+                 kb_path: str | None = None, rag_db: str | None = None, loan_tape: dict | None = None,
+                 management_approver: str | None = None):
         self.run_id = "RUN-" + dt.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:4].upper()
         self.started = dt.datetime.now().isoformat(timespec="seconds")
         self.input_path, self.base_dir, self.mode, self.layer = input_path, base_dir, mode, layer
@@ -96,6 +97,7 @@ class Run:
         self.kb_path = kb_path or os.path.join(base_dir, "regulatory_kb", "nbfc_capital_adequacy_2025.json")
         self.rules_path = rules_path or os.path.join(base_dir, "rules", "rule_library_v1.0.yaml")
         self.rag_db = rag_db
+        self.management_approver = (management_approver or "").strip()
         self.loan_tape = loan_tape          # summary from capital_agent.bigdata.summarise_loan_tape
         self.market_rwa = 0.0
         self.operational_rwa = 0.0
@@ -131,7 +133,7 @@ class Run:
         self.rbi_health, self.rbi_drift = None, []
         if rag is not None:
             from . import rbi_brain
-            self.rbi_health = rbi_brain.health(rag, ds.reporting_date)
+            self.rbi_health = rbi_brain.health(rag, ds.reporting_date, framework=self.entity_type)
             st = rag.stats()
             self.log("1 Ingestion", "-", f"RAG store: {st['documents']} RBI documents, {st['chunks_current']} current "
                      f"paragraph chunks; retrieval filtered to text in force on {ds.reporting_date}", actor="Engine")
@@ -228,7 +230,14 @@ class Run:
                 if entry.stage == "4 Calculation":
                     entry.reconciliation_status = "BENCHMARK_PASS"
         open_blocking = [e for e in self.exceptions if e.status == "OPEN" and SEV_RANK[e.severity] <= 2]
-        self.status = ("DRAFT - PENDING SME REVIEW" if open_blocking else "READY FOR CHECKER SIGN-OFF")
+        failed_controls = [c for c in self.control_checks if c.status == "FAIL"]
+        self.management_ready = bool(self.management_approver and not open_blocking and not failed_controls)
+        if self.management_ready:
+            self.status = "MANAGEMENT-READY - HUMAN APPROVAL RECORDED"
+        elif self.framework_diagnostics:
+            self.status = "BLOCKED - CALCULATION EVIDENCE INCOMPLETE"
+        else:
+            self.status = "DRAFT - CALCULATED; PENDING HUMAN APPROVAL"
         self.log("8 Controls", "-", f"Run status: {self.status}; return submission disabled (human approval required)",
                  actor="Engine")
         return self
@@ -654,21 +663,24 @@ class Run:
             self._add(ExceptionItem(
                 "EXC-INFO-COLEND", "Completeness", "Co-lending arrangements present - unrealised profit not evidenced",
                 "Note 18 shows payables under co-lending. Unrealised profit booked on co-lent loans must be deducted from "
-                "CET1 / owned fund until maturity; no such figure is in the data.", "Request figure; nil deduction applied",
-                "n/a", "NBFC-CA-2025 para 15(2)", "Upfront gain recognised on co-lending / assignments", "Nil assumed",
+                "CET1 / owned fund until maturity; no such figure is in the data.", "Request figure; no nil deduction inferred",
+                "n/a", "NBFC-CA-2025 para 15(2)", "Upfront gain recognised on co-lending / assignments",
+                "Not calculated until evidenced",
                 maker_ref="-"), None, "Medium")
         self._add(ExceptionItem(
             "EXC-INFO-DLG", "Completeness", "Default loss guarantee (DLG) exposure not evidenced",
             "If the entity provides DLG under digital-lending arrangements, the outstanding DLG is deducted from capital.",
-            "Request confirmation; nil applied", "n/a", "NBFC-CA-2025 para 15(3)", "DLG register / confirmation",
-            "Nil assumed", maker_ref="-"), None, "Medium")
+            "Request confirmation; no nil amount is inferred", "n/a", "NBFC-CA-2025 para 15(3)",
+            "DLG register / explicit nil confirmation in the workbook",
+            "Not calculated until evidenced", maker_ref="-"), None, "High")
         self._add(ExceptionItem(
             "EXC-INFO-OBS", "Completeness", "No off-balance-sheet (non-market) exposures supplied",
             "Undrawn sanctioned limits (e.g. credit-card or credit lines), guarantees and other commitments attract CCFs "
             "of 0-100% before risk weighting. The note referencing card advances suggests undrawn limits may exist.",
-            "Request contingent liabilities & undrawn commitments; nil applied", "n/a", "NBFC-CA-2025 para 18(4)-(5)",
-            "Contingent liabilities note; undrawn limits by tenor and cancellability", "Nil assumed", maker_ref="-"),
-            None, "Medium")
+            "Request contingent liabilities & undrawn commitments; no nil amount is inferred", "n/a",
+            "NBFC-CA-2025 para 18(4)-(5)",
+            "Contingent liabilities note; undrawn limits by tenor and cancellability; explicit nil confirmation",
+            "Not calculated until evidenced", maker_ref="-"), None, "High")
         self._add(ExceptionItem(
             "EXC-INFO-DTA", "Evidence", "Confirm DTA composition",
             "Full net DTA is deducted (agent and maker agree). Confirm no DTL is available for same-authority offset and "
@@ -697,6 +709,23 @@ class Run:
                 "Loans at 125% (maker basis)", item_ids=[loans.cls.item_id],
                 scenario_desc=f"If blended RW {lt['blended_risk_weight']:.1%} from the tape is applied",
                 maker_ref="EX004"), {"rwa": {loans.cls.item_id: round(lt["blended_risk_weight"], 6)}}, "Medium")
+        evidence_items = (
+            ("rating", "External rating evidence", "Rating agency report and issue-level mapping", "High"),
+            ("collateral", "Collateral eligibility evidence", "Collateral valuation, enforceability and haircut schedule", "High"),
+            ("guarantee", "Guarantee eligibility evidence", "Guarantee deed, guarantor eligibility and amount covered", "High"),
+            ("minority interest", "Minority-interest evidence", "Subsidiary consolidation and regulatory recognition schedule", "High"),
+            ("netting", "Netting evidence", "Legally enforceable netting opinion and CSA/ISDA terms", "High"),
+        )
+        raw = norm(self.ds.raw_text)
+        for term, title, evidence, severity in evidence_items:
+            if term in raw and not any(term in norm(e.title) for e in self.exceptions):
+                self._add(ExceptionItem(
+                    f"EXC-EVIDENCE-{term.upper().replace(' ', '-')}", "Evidence",
+                    title + " is not sufficient for automatic treatment",
+                    f"The workbook mentions {term}, but does not establish regulatory eligibility or the amount "
+                    "to recognise. Missing evidence must route to review; no benefit is inferred.",
+                    "Obtain and document the required evidence", "No automatic recognition", "Applicable RBI rule",
+                    evidence, "Not applied pending evidence"), None, severity)
         # ---- RBI knowledge-base governance (the "brain")
         h = self.rbi_health
         if h is not None:
@@ -724,21 +753,15 @@ class Run:
                     "will apply them automatically.", "No action for this reporting date", "-",
                     "As-of retrieval", "Re-approve affected rules before the next reporting date", "Text in force on reporting date",
                     maker_ref="RBI library"), None, "Low")
-            if h["verdict"] == "curated-only":
+            if h["verdict"] != "ok":
+                source_ids = ", ".join(h.get("source_ids_in_force", [])) or "none"
+                remediation = "; ".join(h.get("blocking_issues", [])) or "Load and approve the applicable RBI source."
                 self._add(ExceptionItem(
-                    "EXC-RBI-COVERAGE", "Governance", f"No full RBI text in force on {date} is loaded",
-                    "Regulatory search is running on the curated paragraph summaries only. Load the RBI Directions "
-                    "(RBI library > Update from RBI, or drop the PDF in the library folder). For an exact historical "
-                    "run, add the version 'Updated as on' a date on or before the reporting date from RBI's "
-                    "'Master Directions - Previous Versions' page.", "Load RBI text", "-", "Knowledge base health",
-                    "RBI Directions PDF in force on the reporting date", "Curated summaries", maker_ref="RBI library"),
-                    None, "Medium")
-            elif h["verdict"] == "stale":
-                self._add(ExceptionItem(
-                    "EXC-RBI-STALE", "Governance", "RBI knowledge base not updated recently",
-                    f"Last successful download {h['last_download']}. Run 'Update from RBI' and 'Check RBI for new "
-                    "notices' before finalising.", "Update the knowledge base", "-", "Knowledge base health",
-                    "Fresh download", "Existing text", maker_ref="RBI library"), None, "Low")
+                    "EXC-RBI-GATE", "Governance", f"RBI source gate: {h['verdict']}",
+                    f"Source IDs in force for {date}: {source_ids}. {remediation}",
+                    "Load, verify and approve the applicable full-text RBI source before sign-off", "-",
+                    "Knowledge base health", "Applicable full-text RBI source and refresh evidence",
+                    f"Current source IDs: {source_ids}", maker_ref="RBI library"), None, "High")
         self.exceptions.sort(key=lambda e: (SEV_RANK[e.severity], -abs(e.impact_crar_bps)))
         for e in self.exceptions:
             self.log("6 Exceptions", e.exc_id, f"[{e.severity}] {e.title}", inp=e.ai_best_guess,
@@ -851,10 +874,21 @@ class Run:
                          else "WARN",
                          actual=f"{sum(e.lineage_status == 'COMPLETE' for e in self.audit if e.stage == '4 Calculation')}/"
                                f"{sum(e.stage == '4 Calculation' for e in self.audit)} complete"))
-        out.append(Check("C09", "Control", "RBI source is in force for the reporting date",
-                         "PASS" if self.rbi_health is None or self.rbi_health.get("verdict") == "ok" else "WARN",
+        out.append(Check("C09", "Control", "RBI source is fresh, approved, full-text and framework-matched",
+                         "PASS" if self.rbi_health is not None and self.rbi_health.get("verdict") == "ok" else "FAIL",
                          actual=self.rbi_health.get("verdict") if self.rbi_health else "curated KB only",
-                         detail="Curated-only or stale source text requires SME confirmation before sign-off."))
+                         detail=("Source IDs: " + ", ".join(self.rbi_health.get("source_ids_in_force", [])) +
+                                 ". Remediation: " + "; ".join(self.rbi_health.get("blocking_issues", [])))
+                         if self.rbi_health else "No RBI store supplied; load the applicable full-text source before sign-off."))
+        out.append(Check("C10", "Control", "Framework and required evidence gate passes",
+                         "PASS" if not self.framework_diagnostics else "FAIL",
+                         expected="no blocking diagnostics",
+                         actual="; ".join(self.framework_diagnostics) or "clear"))
+        out.append(Check("C11", "Control", "Named human management approval recorded",
+                         "PASS" if self.management_approver else "FAIL",
+                         expected="named approver",
+                         actual=self.management_approver or "missing",
+                         detail="Calculated draft remains non-management-ready until a named human approval is supplied."))
         return out
 
     # ============================================================ export
@@ -865,6 +899,7 @@ class Run:
             "data_policy": LOCAL_ONLY_POLICY,
             "reporting_date": str(self.ds.reporting_date), "entity_type": self.entity_type, "layer": self.layer,
             "framework": self.profile.framework, "market_rwa": self.market_rwa,
+            "management_ready": self.management_ready, "management_approver": self.management_approver,
             "operational_rwa": self.operational_rwa,
             "kb_version": self.kb.version, "rule_library": self.rules.version,
             "results": r.as_dict(), "agent_view": self.agent_view.as_dict(), "minimums": self.minimums,

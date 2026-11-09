@@ -15,7 +15,7 @@ KIND = {"base": ("Base Directions", "#4F2D7F"), "consolidated": ("Consolidated",
 
 def build(run, rag):
     as_of = run.ds.reporting_date if run is not None else dt.date.today()
-    h = rbi_brain.health(rag, as_of)
+    h = rbi_brain.health(rag, as_of, framework=run.entity_type if run is not None else None)
     drift = rbi_brain.rule_drift(rag, run.rules.rules, run.kb, as_of=as_of) if run is not None else []
     watch = rbi_brain.watch_items(rag)
     changes = rag.db.execute("SELECT doc_id, from_v, to_v, para, change, old_text, new_text, effective FROM changes "
@@ -26,12 +26,18 @@ def build(run, rag):
     short = lambda d: (nm(d).get("ref_no") or ("Curated summary" if d["kind"] == "curated" else d["doc_id"])) + (f" · v{d['version']}" if d["version"] > 1 else "")
     verdict = {"ok": ("Full RBI text in force on the reporting date", "ok"),
                "curated-only": ("Curated summaries only — load RBI text", ""),
-               "stale": ("RBI text loaded but not updated recently", "")}[h["verdict"]]
+               "stale": ("RBI text loaded but not updated recently", ""),
+               "draft-present": ("Draft source present — never use for sign-off", ""),
+               "future-dated": ("Future-dated source present — verify as-of coverage", ""),
+               "framework-mismatch": ("RBI source framework mismatch — remediate", "")}.get(
+                   h["verdict"], ("RBI source gate requires remediation", ""))
     new_n = sum(w["status"] == "NEW" for w in watch)
     ring = (f'<div style="min-width:230px"><div class="eyebrow" style="margin-bottom:10px">For this run · {as_of:%d %b %Y}</div>'
             f'<div style="font-size:13px;line-height:1.9;color:#EDE6FA">✓ {h["full_text_in_force"]} full RBI text(s) in force<br>'
             f'⏭ {len(h["newer_than_as_of"])} newer version(s) — not applied<br>✎ {h["drafts"]} draft(s) — never applied<br>'
-            f'⚑ {sum(d["applies_to_run"] for d in drift)} rule(s) need re-approval</div></div>')
+            f'⚑ {sum(d["applies_to_run"] for d in drift)} rule(s) need re-approval<br>'
+            f'IDs in force: {escape(", ".join(h.get("source_ids_in_force", [])) or "none")}<br>'
+            f'Remediation: {escape("; ".join(h.get("blocking_issues", [])) or "none")}</div></div>')
     body = hero("The brain · RBI knowledge base", verdict[0], count(len({d["doc_id"] for d in docs})), " documents",
                 [(f"{rag.stats()['chunks_current']:,} paragraphs searchable", ""),
                  (f"Last RBI download: {(h['last_download'] or 'never')[:10]}", ""),

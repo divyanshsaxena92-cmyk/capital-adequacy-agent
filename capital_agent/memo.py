@@ -9,7 +9,8 @@ from . import ledger, rbi_brain
 
 def build(run, rag=None, prepared_by: str = "") -> bytes:
     r, m = run.final, run.minimums
-    ok = r.crar >= m["crar"] and r.tier1_ratio >= m["tier1"]
+    compliant = r.crar >= m["crar"] and r.tier1_ratio >= m["tier1"]
+    ok = run.status.startswith("MANAGEMENT-READY") and compliant
     led = ledger.build(run)
     open_ex = [e for e in run.exceptions if e.status == "OPEN"]
     impact = sorted([e for e in open_ex if e.scenario_overrides], key=lambda e: -abs(e.impact_crar_bps))[:8]
@@ -40,7 +41,8 @@ def build(run, rag=None, prepared_by: str = "") -> bytes:
                     for t, ref, k, f in applied)
     rbi_n = "".join(tr([escape(t), f'<span style="white-space:nowrap">{escape(ref)}</span>', escape(k.split(" (")[0].split(" -")[0]), escape(f)])
                     for t, ref, k, f in newer)
-    passed = sum(c.status == "PASS" for c in run.checks)
+    passed = sum(c.status == "PASS" for c in run.checks + run.control_checks)
+    source_ids = ", ".join(run.rbi_health.get("source_ids_in_force", [])) if run.rbi_health else "none"
     html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Capital adequacy memo - {escape(as_of)}</title>
 <style>
 @page {{ size: A4; margin: 14mm; }}
@@ -62,7 +64,7 @@ th {{ font-size: 10px; color: #6B6878; text-transform: uppercase; letter-spacing
 <div class="muted">{escape(run.entity_type)} · {escape("Middle" if run.layer == "ML" else "Upper")} Layer · reporting date {run.ds.reporting_date:%d %B %Y}</div></div>
 <div class="meta">Run {escape(run.run_id)}<br>Prepared {dt.datetime.now():%d %b %Y %H:%M}{(" by " + escape(prepared_by)) if prepared_by else ""}<br>
 <span class="draft">{escape(run.status)}</span></div></div>
-<div class="verdict"><b>{"Compliant" if ok else "Not compliant"} with RBI minimum capital requirements.</b> CRAR {r.crar:.2%} against {m['crar']:.0%};
+<div class="verdict"><b>{"Compliant calculation" if compliant else "Not compliant"}; {"management-ready" if ok else "calculated draft — not management-ready"}.</b> CRAR {r.crar:.2%} against {m['crar']:.0%};
 Tier 1 ratio {r.tier1_ratio:.2%} against {m['tier1']:.0%}. {len(open_ex)} items await SME review; reported figures change only on signed decisions.</div>
 <h2>Key figures</h2><table>{kf}</table>
 <div class="two"><div><h2>Largest open judgement calls</h2><table><tr><th>ID</th><th>Item</th><th>Priority</th><th>bps</th></tr>{items or tr(["—", "None", "", ""])}</table></div>
@@ -73,11 +75,12 @@ Tier 1 ratio {r.tier1_ratio:.2%} against {m['tier1']:.0%}. {len(open_ex)} items 
 {f'<h2>Newer RBI texts — not applied to this reporting date</h2><table><tr><th>Official RBI name</th><th>RBI reference</th><th>Type</th><th>In force from</th></tr>{rbi_n}</table>' if rbi_n else ''}
 <h2>Controls</h2><table>
 {tr(["Calculation ledger", f"{len(led['rows'])} steps; independently reproduces the engine: <b>{'yes' if led['reproduced'] else 'NO'}</b>", "CSV available"])}
-{tr(["Source validation", f"{passed} of {len(run.checks)} tie-outs pass", "failures listed in the review queue"])}
+{tr(["Source/control validation", f"{passed} of {len(run.checks + run.control_checks)} checks pass", "failures listed in the review queue"])}
+{tr(["RBI source gate", f"{escape(run.rbi_health.get('verdict')) if run.rbi_health else 'missing'} · {escape(source_ids)}", "Full-text, fresh and framework-matched source required"])}
 {tr(["Benchmark", f"{sum(b['status'] == 'PASS' for b in run.benchmark)} of {len(run.benchmark)} metrics tie to the maker's schedule", ""])}
 {tr(["Method", "Deterministic rules engine and offline RBI knowledge base; no AI model, no API, no data leaves the machine", f"rules {escape(run.rules.version)} · KB {escape(run.kb.version)}"])}
 </table>
 <div class="sign"><div>Prepared by (maker)</div><div>Reviewed by (checker / SME)</div><div>Approved by</div></div>
-<p class="muted" style="margin-top:18px">Decision-support output. Figures are draft until the open items are decided and the checker signs off.</p>
+<p class="muted" style="margin-top:18px">Decision-support output. "Calculated draft" is not "management-ready"; management-ready status requires passing controls and a named human approval.</p>
 </body></html>"""
     return html.encode("utf-8")

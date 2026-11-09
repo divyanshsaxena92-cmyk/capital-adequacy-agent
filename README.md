@@ -25,11 +25,12 @@ composition, RWA evidence, and any derivative deal schedule. Existing NBFC workb
 NBFC-CA-2025 minimums (15% CRAR and 10% Tier 1 for ML; UL-specific CET1 evidence remains a review item).
 
 Commercial-bank workbooks should contain a presentation balance sheet plus capital and RWA schedules with explicit
-CET1/AT1/Tier 2 eligibility, and separate market-risk and operational-risk RWA schedules. Those supplemental
-schedules are added deterministically to total RWA. If either schedule is absent, preflight blocks management
-sign-off with an actionable diagnostic instead of treating the missing risk as zero. Instrument eligibility,
-counterparty treatment, and risk weights remain human-review items unless the workbook supplies sufficient
-evidence and an approved rule supports them.
+CET1/AT1/Tier 2 composition and eligibility, and separate market-risk and operational-risk RWA schedules. Those
+supplemental schedules are added deterministically to total RWA. Missing schedules, ambiguous templates, malformed
+rows, or absent capital composition block the evidence gate; missing risk is never inferred as zero. A schedule
+containing a documented zero row is accepted as explicit nil evidence and is logged. Rating, collateral, guarantee,
+netting, minority-interest, derivative counterparty and instrument-term evidence remains a review/blocking item
+according to materiality; an approved rule cannot substitute for missing source evidence.
 
 The supported calculation is deliberately narrower than a regulatory return: unsupported bank templates, missing
 capital composition, missing market or operational risk evidence, ambiguous risk weights, stale RBI text, and
@@ -43,7 +44,7 @@ Uploadable sanitized fixtures are included for end-to-end testing:
 | `data/synthetic_commercial_bank.xlsx` | Commercial-bank balance sheet, CET1-style capital/RWA schedules, market-risk RWA, operational-risk RWA, and `Expected Output` sheet | Tier 1 `100.00`, Tier 2 `0.00`, Total RWA `660.00`, CRAR `15.151515%`, Tier 1 ratio `15.151515%` |
 | `data/synthetic_nbfc.xlsx` | NBFC section 45-IC marker, owned-fund-style schedules, loan RWA, and `Expected Output` sheet | Tier 1 `100.00`, Tier 2 `0.00`, Total RWA `725.00`, CRAR `13.793103%`, Tier 1 ratio `13.793103%` |
 
-Both files are intentionally synthetic and are expected to remain `DRAFT - PENDING SME REVIEW`: the bank fixture
+Both files are intentionally synthetic and are expected to remain `DRAFT - CALCULATED; PENDING HUMAN APPROVAL`: the bank fixture
 demonstrates deterministic market/operational RWA inclusion but does not constitute a complete Basel return, and
 the NBFC fixture is below the 15% CRAR / 10% Tier 1 minimums. RBI refresh/RAG documentation is not embedded in
 these workbooks; a clean management sign-off still requires the applicable RBI text in force for the reporting date,
@@ -73,11 +74,13 @@ must not be treated as a clean management sign-off.
 ### Management demo gate
 
 Before presenting a run, confirm the **Validation** page has explicit units, no malformed numeric cells,
-the required source sheet, and a visible status for optional/missing schedules. Use the **Audit trail** and
-**Calculation ledger** to show source cell -> approved rule -> treatment -> formula -> output. A run remains
-`DRAFT - PENDING SME REVIEW` when classifications, layer/entity framework, evidence, stale/curated RBI text,
-or rule drift require human action. Only a signed reviewer decision can change an exception outcome; source
-workbooks are read-only and output packs are additive.
+the required source sheet, and a visible status for every required evidence schedule. Use the **Audit trail** and
+**Calculation ledger** to show source cell -> approved rule -> treatment -> formula -> output. A run is a
+`DRAFT - CALCULATED; PENDING HUMAN APPROVAL` until controls pass and a named human approval is supplied; it cannot
+be called management-ready merely because the ratios pass. Unsupported templates, stale/curated-only/draft/future
+or framework-mismatched RBI sources, missing source IDs, and unresolved material evidence are blocking controls.
+Only a signed reviewer decision can change an exception outcome; source workbooks are read-only and output packs are
+additive.
 
 ## Pages
 

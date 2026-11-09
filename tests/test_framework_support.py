@@ -12,6 +12,7 @@ sys.path.insert(0, HERE)
 from capital_agent.agent import Run
 from capital_agent.framework import BANK_PROFILE, NBFC_PROFILE, profile_for_dataset
 from capital_agent.ingest import ingest
+from capital_agent.security import deployment_safety_check
 from ui.preflight import run as preflight
 
 
@@ -83,6 +84,23 @@ class TestFrameworkSupport(unittest.TestCase):
         self.assertTrue(any("market-risk RWA schedule is missing" in x for x in result["blocking"]))
         self.assertTrue(any("operational-risk schedule is missing" in x for x in result["blocking"]))
 
+    def test_explicit_nil_market_and_operational_rows_are_accepted(self):
+        wb = bank_workbook()
+        wb["Market Risk"]["B2"] = 0.0
+        wb["Operational Risk"]["B2"] = 0.0
+        path = self._save(wb)
+        ds = ingest(path)
+        self.assertTrue(ds.market_inputs and ds.operational_inputs)
+        self.assertEqual(preflight(path)["diagnostics"], [])
+
+    def test_missing_bank_evidence_blocks_run_status_instead_of_silent_zero(self):
+        path = self._save(bank_workbook(include_supplemental=False))
+        run = Run(path, HERE).execute()
+        self.assertTrue(run.status.startswith("BLOCKED"))
+        self.assertEqual(run.market_rwa, 0.0)
+        self.assertTrue(any(c.check_id == "C10" and c.status == "FAIL" for c in run.control_checks))
+        self.assertTrue(any("market-risk RWA schedule is missing" in e.issue for e in run.exceptions))
+
     def test_bank_run_includes_explicit_market_and_operational_rwa(self):
         path = self._save(bank_workbook())
         run = Run(path, HERE).execute()
@@ -101,6 +119,22 @@ class TestFrameworkSupport(unittest.TestCase):
         ws.append(["Units: INR Lakhs"])
         path = self._save(wb)
         self.assertIs(profile_for_dataset(ingest(path)), NBFC_PROFILE)
+
+    def test_community_cloud_safety_is_viewer_only(self):
+        old = {k: os.environ.get(k) for k in ("CAPITAL_AGENT_DEPLOYMENT", "CAPITAL_AGENT_MODE")}
+        try:
+            os.environ["CAPITAL_AGENT_DEPLOYMENT"] = "community_cloud"
+            os.environ["CAPITAL_AGENT_MODE"] = "full"
+            with self.assertRaises(RuntimeError):
+                deployment_safety_check()
+            os.environ["CAPITAL_AGENT_MODE"] = "viewer"
+            self.assertFalse(deployment_safety_check()["client_uploads_allowed"])
+        finally:
+            for key, value in old.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 if __name__ == "__main__":

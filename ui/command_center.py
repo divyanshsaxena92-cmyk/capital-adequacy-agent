@@ -376,8 +376,11 @@ def build(run, rag_stats: dict | None = None, kb_hits: list | None = None) -> tu
     ok = r.crar >= m["crar"] and r.tier1_ratio >= m["tier1"]
     open_ex = [e for e in run.exceptions if e.status == "OPEN"]
     hi = [e for e in open_ex if e.severity in ("Critical", "High")]
-    passed = sum(c.status == "PASS" for c in run.checks)
-    nchk = len(run.checks)
+    passed = sum(c.status == "PASS" for c in run.checks + run.control_checks)
+    nchk = len(run.checks + run.control_checks)
+    status_label = ("Management-ready — human approval recorded" if run.status.startswith("MANAGEMENT-READY")
+                    else "Blocked — evidence/control gate failed" if run.status.startswith("BLOCKED")
+                    else "Calculated draft — human approval pending")
     bench = run.benchmark
     tie = sum(b["status"] == "PASS" for b in bench)
     date = f"{run.ds.reporting_date:%d %b %Y}"
@@ -423,7 +426,7 @@ def build(run, rag_stats: dict | None = None, kb_hits: list | None = None) -> tu
    <circle class="ring" cx="50" cy="50" r="40" fill="none" stroke="#2E8B5E" stroke-width="10" stroke-linecap="round"
     stroke-dasharray="{circ:.2f}" style="--c:{circ:.2f};stroke-dashoffset:{circ * (1 - passed / max(nchk, 1)):.2f}"/></svg>
    <div class="c"><div><b>{passed}/{nchk}</b><small>checks pass</small></div></div></div>
-  <div style="min-width:0"><div class="t" style="font-size:13.5px">{'Draft — SME review pending' if run.status.startswith('DRAFT') else 'Ready for checker'}</div>
+  <div style="min-width:0"><div class="t" style="font-size:13.5px">{status_label}</div>
    <div class="s">{len(open_ex)} open items · {len(hi)} high priority</div>
    <div class="s mono" style="margin-top:8px">{escape(run.run_id)}</div></div></div>
  <div class="kv"><span class="k">Benchmark tie-out</span><span class="v" style="color:#2E8B5E">{tie}/{len(bench)} ✓</span>
@@ -629,7 +632,7 @@ def build(run, rag_stats: dict | None = None, kb_hits: list | None = None) -> tu
                   for c in bad)
     quality = f"""<section class="card c4" style="--d:.7s" data-search="data quality validation checks"><div class="hd"><div><div class="t">Data quality</div>
  <div class="s">Source tie-outs, failures first</div></div><span class="chip num">{passed}/{nchk}</span></div>
- <div class="seg">{segs}</div><div class="s" style="margin-bottom:6px">{passed} pass · {sum(c.status == 'FAIL' for c in run.checks)} fail · {sum(c.status == 'WARN' for c in run.checks)} warn</div>{chk}</section>"""
+ <div class="seg">{segs}</div><div class="s" style="margin-bottom:6px">{passed} pass · {sum(c.status == 'FAIL' for c in run.checks + run.control_checks)} fail · {sum(c.status == 'WARN' for c in run.checks + run.control_checks)} warn</div>{chk}</section>"""
     cites = "".join(f'<div class="cite" data-search="{escape((h["para"] + " " + h["title"] + " " + h["text"]).lower()[:400])}">'
                     f'<b><span class="p">para {escape(h["para"])}</span>{escape(h.get("heading") or h["title"][:46])}</b><div>{escape(h["text"][:150])}…</div></div>'
                     for h in (kb_hits or [])[:3])

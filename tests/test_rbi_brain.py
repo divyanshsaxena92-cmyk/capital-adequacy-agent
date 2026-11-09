@@ -125,6 +125,25 @@ class TestStoreBehaviour(unittest.TestCase):
         self.assertEqual(h["full_text_in_force"], 1)
         self.assertIn("AMD1", [d["doc_id"] for d in h["newer_than_as_of"]])
 
+    def test_health_blocks_framework_mismatch_and_exposes_source_ids(self):
+        self.rag.ingest({"id": "BANK1", "title": "Bank Directions", "type": "pdf", "framework": "BANK",
+                         "effective_from": "2025-11-28"}, pdf_bytes(BASE))
+        h = rbi_brain.health(self.rag, "2026-03-31", framework="NBFC")
+        self.assertEqual(h["verdict"], "framework-mismatch")
+        self.assertTrue(any("BANK1" in issue for issue in h["blocking_issues"]))
+        self.assertEqual(h["source_ids_in_force"], [])
+
+    def test_health_blocks_draft_and_future_sources(self):
+        self.rag.ingest({"id": "BASE", "title": "Directions, 2025", "type": "pdf", "framework": "NBFC",
+                         "effective_from": "2025-11-28"}, pdf_bytes(BASE))
+        self.rag.ingest({"id": "DRAFT1", "title": "Draft Amendment Directions", "type": "pdf", "framework": "NBFC"},
+                        pdf_bytes(DRAFT))
+        self.rag.ingest({"id": "FUTURE1", "title": "Future Directions", "type": "pdf", "framework": "NBFC",
+                         "effective_from": "2027-01-01"}, pdf_bytes(BASE))
+        h = rbi_brain.health(self.rag, "2026-03-31", framework="NBFC")
+        self.assertIn(h["verdict"], {"draft-present", "future-dated"})
+        self.assertTrue(h["blocking_issues"])
+
     def test_sme_override_redates_text(self):
         self.rag.ingest({"id": "AMD1", "title": "Amendment Directions, 2026", "type": "pdf", "framework": "NBFC"},
                         pdf_bytes(AMD))

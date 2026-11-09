@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .ingest import Dataset, norm
+from .framework import BANK_PROFILE, profile_for_dataset
 
 TOL = 0.01  # INR lakhs
 
@@ -43,6 +44,7 @@ def source_checks(ds: Dataset) -> list[Check]:
     c: list[Check] = []
     f = ds.find
     v = lambda pat, sec="FACE": (f(pat, sec).amount if f(pat, sec) else 0.0)
+    profile = profile_for_dataset(ds)
 
     # ---- structure & metadata
     c.append(Check("V01", "Ingestion", "Reporting date identified", "PASS" if ds.reporting_date else "FAIL",
@@ -64,6 +66,31 @@ def source_checks(ds: Dataset) -> list[Check]:
         status = "PASS" if present else severity
         detail = "Optional schedule absent; deterministic fallback and human review apply." if not present else ""
         c.append(Check(f"V0-{role}", "Schema", label, status, actual=ds.sheet_map.get(role, "absent"), detail=detail))
+    if profile is BANK_PROFILE:
+        for role, value_key, label in (
+            ("market_inputs", "market_risk_rwa", "Commercial-bank market-risk RWA evidence"),
+            ("operational_inputs", "operational_risk_rwa", "Commercial-bank operational-risk evidence"),
+        ):
+            rows = getattr(ds, role, [])
+            values = [_num(r.get(value_key)) for r in rows]
+            valid = bool(rows) and all(v is not None and v >= 0 for v in values)
+            c.append(Check(
+                f"V0-{role}", "Schema", label,
+                "PASS" if valid else "FAIL",
+                expected="explicit schedule or nil row",
+                actual=ds.sheet_map.get(role, "missing"),
+                detail=("A zero-valued row is explicit nil evidence and is accepted."
+                        if valid and not any(values) else
+                        "Missing or malformed evidence cannot be treated as zero; provide the schedule or an explicit 0 nil row.")
+            ))
+        cap_rows = [r for r in ds.capital_inputs if str(r.get("capital_category", "")).strip()]
+        c.append(Check(
+            "V0-bank-capital-composition", "Schema", "Commercial-bank capital composition evidence",
+            "PASS" if cap_rows else "FAIL",
+            expected="CET1/AT1/Tier 2 rows",
+            actual=", ".join(sorted({str(r.get("capital_category")) for r in cap_rows})) or "missing",
+            detail="Eligibility and composition must be evidenced in the workbook; no missing component is inferred as zero."
+        ))
     c.append(Check("V21", "Schema", "No formulas in source workbook input cells",
                    "WARN" if ds.formula_cells else "PASS",
                    actual=", ".join(ds.formula_cells[:20]) or "none",

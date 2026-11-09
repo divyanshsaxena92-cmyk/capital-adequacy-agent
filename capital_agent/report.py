@@ -198,7 +198,8 @@ def build_pack(run, path: str):
             ("Regulatory framework applied", "RBI NBFC Prudential Norms on Capital Adequacy Directions, 2025 "
              "(RBI/DOR/2025-26/345), as in force at reporting date"),
             ("Knowledge base / rule library", f"{run.kb.version} / {run.rules.version}"),
-            ("Agent mode", run.mode), ("Run ID", run.run_id), ("Run status", run.status)]
+            ("Agent mode", run.mode), ("Run ID", run.run_id),             ("Run status", run.status),
+            ("Management-ready approval", run.management_approver or "NONE - calculated draft only")]
     for i, (k, v) in enumerate(meta, start=4):
         ws.cell(row=i, column=1, value=k).font = F_BOLD
         c = ws.cell(row=i, column=2, value=v)

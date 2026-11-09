@@ -58,15 +58,26 @@ def preflight_diagnostics(ds: Dataset, profile: FrameworkProfile) -> list[str]:
             "Upload the named schedule or select the correct framework."
         )
     if profile is BANK_PROFILE:
+        if "capital_inputs" in ds.sheet_map:
+            rows = [r for r in ds.capital_inputs if str(r.get("capital_category", "")).strip()]
+            if not rows:
+                diagnostics.append(
+                    "Commercial-bank capital composition schedule has no populated Capital_Category evidence. "
+                    "Provide CET1/AT1/Tier 2 rows with source amounts and eligibility support."
+                )
+        if "rwa_inputs" in ds.sheet_map and not ds.rwa_inputs:
+            diagnostics.append(
+                "Commercial-bank RWA schedule contains no data rows. Provide credit-RWA exposures and risk weights."
+            )
         if "market_inputs" not in ds.sheet_map:
             diagnostics.append(
                 "Commercial-bank market-risk RWA schedule is missing; total RWA cannot be signed off. "
-                "Provide market-risk capital charge/RWA by reporting date, or explicitly document nil exposure."
+                "Provide market-risk capital charge/RWA by reporting date, or upload a schedule with an explicit 0 nil row."
             )
         if "operational_inputs" not in ds.sheet_map:
             diagnostics.append(
                 "Commercial-bank operational-risk schedule is missing; total RWA cannot be signed off. "
-                "Provide the applicable operational-risk capital charge/RWA, or explicitly document nil exposure."
+                "Provide the applicable operational-risk capital charge/RWA, or upload a schedule with an explicit 0 nil row."
             )
     if profile is UNKNOWN_PROFILE:
         diagnostics.append(

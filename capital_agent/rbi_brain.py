@@ -406,7 +406,8 @@ def rule_drift(store, rules: dict, kb, as_of: dt.date | str | None = None) -> li
 
 
 # ------------------------------------------------------------------ health
-def health(store, as_of: dt.date | str | None = None, stale_days: int = 30) -> dict:
+def health(store, as_of: dt.date | str | None = None, stale_days: int = 30,
+           framework: str | None = None) -> dict:
     ensure_schema(store.db)
     as_of = str(as_of or dt.date.today())
     docs = store.documents()
@@ -420,8 +421,12 @@ def health(store, as_of: dt.date | str | None = None, stale_days: int = 30) -> d
         rows.append({**d, "kind": k, "issued": iss or d.get("issued"), "basis": basis, "confidence": conf,
                      "needs_ocr": bool(ocr), "in_force_on_date": in_force and k != "draft",
                      "after_date": d["effective_from"] > as_of and k != "draft"})
-    full_text = [r for r in rows if r["in_force_on_date"] and r["kind"] != "curated"]
+    full_text = [r for r in rows if r["in_force_on_date"] and r["kind"] != "curated"
+                 and (not framework or r.get("framework") == framework)]
     newer = [r for r in rows if r["after_date"]]
+    framework_mismatch = ([r for r in rows if r["in_force_on_date"] and r["kind"] != "curated"
+                           and framework and r.get("framework") != framework]
+                          if framework else [])
     last = store.db.execute("SELECT MAX(fetched_at) FROM documents WHERE origin NOT LIKE 'curated%'").fetchone()[0]
     stale = (last is None) or (dt.datetime.fromisoformat(last).date() < dt.date.today() - dt.timedelta(days=stale_days))
     errors = store.db.execute("SELECT ts, doc_id, detail FROM ingest_log WHERE action IN ('error','rejected') "
@@ -431,11 +436,38 @@ def health(store, as_of: dt.date | str | None = None, stale_days: int = 30) -> d
                    dt.datetime.fromisoformat(feeds_last).date() < dt.date.today() - dt.timedelta(days=14))
     new_watch = store.db.execute("SELECT COUNT(*) FROM watch_items WHERE status='NEW'").fetchone()[0]
     changes = store.db.execute("SELECT COUNT(*) FROM changes").fetchone()[0]
-    return {"as_of": as_of, "documents": rows, "full_text_in_force": len(full_text), "newer_than_as_of": newer,
+    blocking = []
+    if not full_text:
+        blocking.append("No full-text source in force for the reporting date and applicable framework.")
+    if framework_mismatch:
+        blocking.append("In-force full-text sources are framework-mismatched: " +
+                        ", ".join(f"{r['doc_id']} v{r['version']}" for r in framework_mismatch))
+    if newer:
+        blocking.append("Future-dated source versions are present: " +
+                        ", ".join(f"{r['doc_id']} v{r['version']} ({r['effective_from']})" for r in newer[:8]))
+    if any(r["kind"] == "draft" for r in rows):
+        blocking.append("Draft sources are present and must not support management status.")
+    if stale:
+        blocking.append("The RBI source refresh is stale or has never completed successfully.")
+    if not blocking:
+        verdict = "ok"
+    elif framework_mismatch:
+        verdict = "framework-mismatch"
+    elif not full_text:
+        verdict = "curated-only"
+    elif newer:
+        verdict = "future-dated"
+    elif any(r["kind"] == "draft" for r in rows):
+        verdict = "draft-present"
+    else:
+        verdict = "stale"
+    return {"as_of": as_of, "framework": framework, "documents": rows, "full_text_in_force": len(full_text),
+            "source_ids_in_force": [f"{r['doc_id']} v{r['version']}" for r in full_text],
+            "newer_than_as_of": newer, "framework_mismatch": framework_mismatch,
             "drafts": sum(r["kind"] == "draft" for r in rows), "needs_ocr": [r["doc_id"] for r in rows if r["needs_ocr"]],
             "last_download": last, "stale": stale, "recent_errors": errors, "feeds_last_checked": feeds_last,
             "new_feed_items": new_watch, "changes_logged": changes, "feeds_stale": feeds_stale,
-            "verdict": ("ok" if full_text and not stale else ("curated-only" if not full_text else "stale"))}
+            "blocking_issues": blocking, "verdict": verdict}
 
 
 def set_effective_override(store, doc_id: str, version: int, date_iso: str, who: str = "SME"):

@@ -1,6 +1,6 @@
 # Deploying the Capital Adequacy Agent
 
-## Your plan: GitHub + hosted website (Streamlit Community Cloud)
+## Demo hosting: Streamlit Community Cloud (synthetic fixtures only)
 **Who can change what**
 | Change | Who can do it |
 |---|---|
@@ -17,7 +17,9 @@
    mode = "viewer"
    admin_password = "a-long-password-only-you-know"
    ```
-3. Deploy. The app is private (it inherits the private repo). Click **Share** → invite colleagues by email;
+3. Set `CAPITAL_AGENT_DEPLOYMENT=community_cloud` and `CAPITAL_AGENT_MODE=viewer` in the deployment environment.
+   The application startup check refuses a non-viewer Community Cloud deployment, and upload controls are disabled.
+4. Deploy. The app is private (it inherits the private repo). Click **Share** → invite colleagues by email;
    they sign in with Google or a one-time emailed link. The free tier allows one private app per account.
 4. To change anything: edit and push to GitHub. The site redeploys; everyone sees the new version.
 
@@ -28,11 +30,12 @@ start), and correct titles/dates in `regulatory_kb/sources.yaml`. "Update from R
 cloud servers by RBI's website; the library folder always works.
 
 **Confidentiality**
-Community Cloud runs on servers outside Grant Thornton. Show the sample client only - viewer mode already blocks
-workbook uploads for visitors; as admin, do not upload real client files there. For client work use option B.
-The application enforces a local-only client-data boundary: production runs are rules-only, reject injected
-LLM clients, and never send workbook contents to RBI refreshes or any other network path. Do not weaken this
-boundary for a demo.
+Community Cloud runs on servers outside Grant Thornton. It is **not approved for real client data**. Show only the
+sample client and synthetic bank/NBFC fixtures; do not upload real client files, even as an administrator. The startup
+check refuses a Community Cloud deployment unless it is explicitly viewer-only, and the UI disables workbook uploads.
+For client work use option B. The application enforces a local-only client-data boundary: production runs are
+rules-only, reject injected LLM clients, and never send workbook contents to RBI refreshes or any other network path.
+Do not weaken this boundary for a demo.
 
 ## Other options
 **A. Share from your laptop** (office network / VPN, while your laptop runs it): double-click `run_shared.bat`,
@@ -56,3 +59,5 @@ Ask IT for an intranet URL behind GT single sign-on, a backed-up volume for `/da
    and a benchmark/reconciliation state.
 4. Demonstrate the Exception queue: unresolved classifications, layer/framework assumptions, stale or curated-only
    RBI text, and rule drift remain open until a named reviewer signs a decision.
+5. Treat `CALCULATED DRAFT` and `MANAGEMENT-READY` as different statuses. Management-ready requires passing
+   evidence/RBI controls and a named human approval; a ratio alone is never sufficient.
