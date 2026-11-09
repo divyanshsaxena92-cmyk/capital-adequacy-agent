@@ -12,8 +12,8 @@ import unittest
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 
-from capital_agent.agent import Run  # noqa: E402
-from capital_agent.classifier import AUTO, REVIEW, LineItem, RegulatoryAgent  # noqa: E402
+from capital_agent.agent import AppliedItem, Run  # noqa: E402
+from capital_agent.classifier import AUTO, REVIEW, Classification, LineItem, RegulatoryAgent  # noqa: E402
 from capital_agent.engine import add_on_factor  # noqa: E402
 from capital_agent.knowledge import KnowledgeBase, RuleLibrary  # noqa: E402
 
@@ -129,6 +129,44 @@ class TestGuardrails(unittest.TestCase):
                         "confidence": 0.5, "rationale": "x"})
         c = RegulatoryAgent(self.kb, self.rl, "llm", llm_client=stub).classify(self.item)
         self.assertEqual(c.route, REVIEW)
+
+    def test_missing_risk_weight_is_explicit_in_exception_text(self):
+        run = Run(DATA, HERE).execute()
+        classification = Classification(
+            item_id="RWA-MISSING-RW", label="Variable asset", amount=100.0, source_ref="x!A1",
+            kind="asset", treatment="RISK_WEIGHT", risk_weight=None, rule_id=None, rule_title="",
+            citations=[], confidence=0.4, rationale="Risk weight was not supplied.", alternatives=[],
+            evidence_required="", interpretive=False, route=REVIEW, mode="rules")
+        run._cls_exception(
+            AppliedItem(classification, None, None, "label", 1.0, "Pending review", 100.0), "asset")
+        self.assertIn("Risk weight unknown", run.exceptions[-1].ai_best_guess)
+        self.assertNotIn("Risk weight 0%", run.exceptions[-1].ai_best_guess)
+
+        classification.risk_weight = 0.0
+        run._cls_exception(
+            AppliedItem(classification, None, None, "label", 0.0, "Pending review", 100.0), "asset")
+        self.assertIn("Risk weight 0%", run.exceptions[-1].ai_best_guess)
+
+        from capital_agent.report import build_pack
+        from ui.pages_cc import exceptions as render_exceptions
+        with tempfile.TemporaryDirectory() as out_dir:
+            output = os.path.join(out_dir, "report.xlsx")
+            build_pack(run, output)
+            self.assertTrue(os.path.exists(output))
+        html, _ = render_exceptions(run)
+        self.assertIn("Risk weight 0%", html)
+
+    def test_missing_maker_risk_weight_does_not_become_zero(self):
+        run = Run(DATA, HERE).execute()
+        applied = next(a for a in run.rwa_applied if a.cls.risk_weight is not None)
+        record = next(r for r in run.ds.rwa_inputs if r["item_id"] == applied.maker_ref)
+        record["risk_weight"] = None
+
+        result = run._apply_rwa(applied.cls)
+
+        self.assertIsNone(result.maker_treatment)
+        self.assertIsNotNone(result.applied)
+        self.assertIn("risk weight missing", result.basis)
 
 
 class TestVersioning(unittest.TestCase):

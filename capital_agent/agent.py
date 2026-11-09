@@ -339,16 +339,22 @@ class Run:
                      c.rule_id or "", c.citation_text, f"RW {applied}", c.amount * applied, "Engine")
             return a
         maker_rw = _num(rec["risk_weight"]) if rec else 0.0  # omitted => not risk-weighted
-        if c.route == AUTO and (rec is None and agent_rw == 0.0 or rec is not None and agent_rw == maker_rw):
+        fallback_rw = agent_rw if agent_rw is not None else 1.0
+        if c.route == AUTO and (rec is None and agent_rw == 0.0 or rec is not None and agent_rw is not None and agent_rw == maker_rw):
             applied, basis = agent_rw, "Agent risk weight auto-accepted (agrees with maker)"
         elif c.route == AUTO:
-            applied, basis = maker_rw, "Maker risk weight retained - agent disagrees (pending SME)"
+            applied = maker_rw if maker_rw is not None else fallback_rw
+            basis = ("Maker risk weight retained - agent disagrees (pending SME)" if maker_rw is not None
+                     else "Maker risk weight missing - agent/conservative weight retained pending SME")
         else:
-            applied = maker_rw if rec else (agent_rw if agent_rw is not None else 1.0)
-            basis = "Maker risk weight retained pending SME" if rec else "Agent/conservative weight pending SME"
+            applied = maker_rw if rec and maker_rw is not None else fallback_rw
+            basis = ("Maker risk weight retained pending SME" if rec and maker_rw is not None
+                     else "Maker risk weight missing - agent/conservative weight pending SME" if rec
+                     else "Agent/conservative weight pending SME")
         if rec is None:
             basis += " [not in maker RWA schedule]"
-        a = AppliedItem(c, rec["item_id"] if rec else None, None if rec is None else str(maker_rw), "label", applied,
+        a = AppliedItem(c, rec["item_id"] if rec else None,
+                        None if rec is None or maker_rw is None else str(maker_rw), "label", applied,
                         basis, c.amount)
         self.log("3 Mapping", c.item_id, f"{c.label}: agent proposes RW {agent_rw} (conf {c.confidence}); {c.route}",
                  c.source_ref, c.amount, c.rule_id or "", c.citation_text, f"RW {agent_rw}", None, f"Agent ({c.mode})")
@@ -448,10 +454,12 @@ class Run:
             imp = abs(self._impact(ov)[0])
             if imp > best_imp:
                 best, best_ov, best_imp = alt, ov, imp
-        guess = (f"{c.treatment}" if kind == "capital" else f"Risk weight {c.risk_weight:.0%}") + \
+        guess = (f"{c.treatment}" if kind == "capital" else
+                 f"Risk weight {format(c.risk_weight, '.0%') if c.risk_weight is not None else 'unknown'}") + \
             f" (confidence {c.confidence:.2f}, {c.rule_id})"
         comp = " | ".join(
-            f"{x.get('treatment') if kind == 'capital' else format(x.get('risk_weight') or 0, '.0%')}: {x.get('basis', '')}"
+            f"{x.get('treatment') if kind == 'capital' else (format(x.get('risk_weight'), '.0%') if x.get('risk_weight') is not None else 'unknown')}: "
+            f"{x.get('basis', '')}"
             for x in alts) or "None identified"
         if disagrees:
             title = f"{c.label}: agent and maker treatments differ"
@@ -466,7 +474,7 @@ class Run:
             citations="; ".join(f"{x['doc']} para {x['para']}" for x in c.citations),
             evidence_required=c.evidence_required or rule.get("evidence_required", ""),
             baseline_basis=f"Calculated on: {applied_txt} ({a.basis})", item_ids=[c.item_id],
-            scenario_desc=(f"If '{best.get('treatment') if kind == 'capital' else format(best.get('risk_weight'), '.0%')}' "
+            scenario_desc=(f"If '{best.get('treatment') if kind == 'capital' else (format(best.get('risk_weight'), '.0%') if best.get('risk_weight') is not None else 'unknown')}' "
                            f"applied" if best else "No alternative with numeric effect"),
             maker_ref=a.maker_ref or "")
         self._add(e, best_ov, "Medium" if c.interpretive else "Low")
