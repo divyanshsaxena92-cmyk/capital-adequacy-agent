@@ -49,6 +49,43 @@ def profile_for_dataset(ds: Dataset) -> FrameworkProfile:
     return UNKNOWN_PROFILE
 
 
+def legacy_bank_benchmark_allowed(ds: Dataset, profile: FrameworkProfile) -> bool:
+    """Allow calculation-only processing for older bank maker workbooks."""
+    if profile is not BANK_PROFILE:
+        return False
+    if not ds.expected_output or not ds.capital_inputs or not ds.rwa_inputs:
+        return False
+    if not any(norm(rec.get("metric", "")) == "total rwa"
+               and rec.get("expected_value") is not None for rec in ds.expected_output):
+        return False
+    required = ("asset_class", "risk_weight", "asset_value_inr_lakhs")
+    return all(
+        all(rec.get(key) is not None for key in required)
+        and isinstance(rec.get("risk_weight"), (int, float))
+        and isinstance(rec.get("asset_value_inr_lakhs"), (int, float))
+        and rec["risk_weight"] >= 0
+        and rec["asset_value_inr_lakhs"] >= 0
+        for rec in ds.rwa_inputs
+    )
+
+
+def supplemental_bank_risk_gaps(ds: Dataset, profile: FrameworkProfile) -> list[str]:
+    if profile is not BANK_PROFILE:
+        return []
+    gaps = []
+    if "market_inputs" not in ds.sheet_map:
+        gaps.append(
+            "Commercial-bank market-risk RWA schedule is missing; provide market-risk "
+            "capital charge/RWA or an explicit 0 nil row."
+        )
+    if "operational_inputs" not in ds.sheet_map:
+        gaps.append(
+            "Commercial-bank operational-risk schedule is missing; provide operational-risk "
+            "capital charge/RWA or an explicit 0 nil row."
+        )
+    return gaps
+
+
 def preflight_diagnostics(ds: Dataset, profile: FrameworkProfile) -> list[str]:
     missing = [role for role in profile.required_roles if role not in ds.sheet_map]
     diagnostics = []
@@ -69,16 +106,8 @@ def preflight_diagnostics(ds: Dataset, profile: FrameworkProfile) -> list[str]:
             diagnostics.append(
                 "Commercial-bank RWA schedule contains no data rows. Provide credit-RWA exposures and risk weights."
             )
-        if "market_inputs" not in ds.sheet_map:
-            diagnostics.append(
-                "Commercial-bank market-risk RWA schedule is missing; total RWA cannot be signed off. "
-                "Provide market-risk capital charge/RWA by reporting date, or upload a schedule with an explicit 0 nil row."
-            )
-        if "operational_inputs" not in ds.sheet_map:
-            diagnostics.append(
-                "Commercial-bank operational-risk schedule is missing; total RWA cannot be signed off. "
-                "Provide the applicable operational-risk capital charge/RWA, or upload a schedule with an explicit 0 nil row."
-            )
+        if not legacy_bank_benchmark_allowed(ds, profile):
+            diagnostics.extend(supplemental_bank_risk_gaps(ds, profile))
     if profile is UNKNOWN_PROFILE:
         diagnostics.append(
             "Entity/framework could not be determined from explicit workbook markers or RBI schedule evidence. "

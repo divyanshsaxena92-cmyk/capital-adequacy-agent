@@ -84,6 +84,22 @@ class TestFrameworkSupport(unittest.TestCase):
         self.assertTrue(any("market-risk RWA schedule is missing" in x for x in result["blocking"]))
         self.assertTrue(any("operational-risk schedule is missing" in x for x in result["blocking"]))
 
+    def test_legacy_bank_benchmark_allows_calculation_with_open_warning(self):
+        wb = bank_workbook(include_supplemental=False)
+        expected = wb.create_sheet("Expected Output")
+        expected.append(["Metric", "Expected_Value", "Unit"])
+        expected.append(["Total RWA", 500.0, "INR Lakhs"])
+        path = self._save(wb)
+        result = preflight(path)
+        self.assertEqual(result["blocking"], [])
+        self.assertEqual(len(result["warnings"]), 2)
+        run = Run(path, HERE).execute()
+        self.assertEqual(run.status, "DRAFT - CALCULATED; PENDING HUMAN APPROVAL")
+        self.assertTrue(run.benchmark)
+        self.assertTrue(any(e.exc_id == "EXC-BANK-RISK-EVIDENCE" and e.status == "OPEN"
+                            for e in run.exceptions))
+        self.assertFalse(run.management_ready)
+
     def test_explicit_nil_market_and_operational_rows_are_accepted(self):
         wb = bank_workbook()
         wb["Market Risk"]["B2"] = 0.0
@@ -119,6 +135,18 @@ class TestFrameworkSupport(unittest.TestCase):
         ws.append(["Units: INR Lakhs"])
         path = self._save(wb)
         self.assertIs(profile_for_dataset(ingest(path)), NBFC_PROFILE)
+
+    def test_large_unrecognised_sheet_is_routed_with_row_count(self):
+        wb = bank_workbook()
+        tape = wb.create_sheet("Unrecognised tape")
+        tape.append(["Product", "Amount"])
+        tape.append(["loan", 10])
+        tape.append(["loan", 20])
+        path = self._save(wb)
+        ds = ingest(path, large_rows=2)
+        self.assertIn("Unrecognised tape", ds.large_sheets)
+        self.assertEqual(ds.sheet_rows["Unrecognised tape"], 3)
+        self.assertTrue(any("Large data import" in line for line in ds.ingestion_log))
 
     def test_community_cloud_safety_is_viewer_only(self):
         old = {k: os.environ.get(k) for k in ("CAPITAL_AGENT_DEPLOYMENT", "CAPITAL_AGENT_MODE")}

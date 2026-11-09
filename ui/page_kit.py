@@ -184,9 +184,9 @@ def topbar(title: str, subtitle: str) -> str:
 def hero(eyebrow: str, label: str, value_html: str, unit: str, chips: list, right_html: str = "", span="c8") -> str:
     ch = "".join(f'<span class="gb {c[1] if isinstance(c, tuple) else ""}">{escape(c[0] if isinstance(c, tuple) else c)}</span>' for c in chips)
     return f"""<section class="hero {span}"><div class="orb o1"></div><div class="orb o2"></div><div class="mesh"></div>
- <div><span class="eyebrow"><span class="pulse"></span>{escape(eyebrow)}</span><div class="h1">{escape(label)}</div>
+ <div class="hero-copy"><span class="eyebrow"><span class="pulse"></span>{escape(eyebrow)}</span><div class="h1">{escape(label)}</div>
  <div class="huge" style="font-size:58px">{value_html}<span class="pct">{escape(unit)}</span></div><div class="gbs">{ch}</div></div>
- {right_html}</section>"""
+ <div class="hero-aside">{right_html}</div></section>"""
 
 
 def tile(icon, g1, g2, label, value_html, unit, meter, foot, trend, tbg, tfg, d, drill=None, search=""):

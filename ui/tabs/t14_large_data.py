@@ -24,6 +24,8 @@ def _import(ctx, path, name, sheets=None):
 
 def render(ctx):
     st, store = ctx.st, ctx.extra["data"]
+    from ui import access
+    admin = access.is_admin(st)
     st.caption("Big files are read row by row and stored in a local SQLite database, so memory stays flat. "
                "Header rows are detected automatically, even below title rows.")
 
@@ -35,8 +37,6 @@ def render(ctx):
             res = _import(ctx, ctx.input_path, pf["ds"].path.split("/")[-1], pf["large_sheets"])
             table(st, pd.DataFrame(res))
 
-    from ui import access
-    admin = access.is_admin(st)
     if not admin:
         access.read_only_note(st, theme, "Importing or deleting data")
     theme.section(st, "Import a large file")

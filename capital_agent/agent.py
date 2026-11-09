@@ -24,7 +24,8 @@ from .ingest import Dataset, SourceValue, ingest, norm
 from .knowledge import KnowledgeBase, RuleLibrary
 from .validate import _num, source_checks, Check
 from .security import LOCAL_ONLY_POLICY, enforce_local_only
-from .framework import profile_for_dataset, preflight_diagnostics
+from .framework import (legacy_bank_benchmark_allowed, profile_for_dataset, preflight_diagnostics,
+                        supplemental_bank_risk_gaps)
 
 SEV_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
 TOL = 0.01
@@ -417,6 +418,7 @@ class Run:
                       ("security deposits", "security deposits"), ("payment gateway", "payment gateway"),
                       ("other advances", "other advances"),
                       ("fixed assets", "fixed assets"), ("investments", "investments"),
+                      ("loans", "loan"),
                       ("loans", "loans"), ("loan portfolio", "loan portfolio")]
 
     def _apply_rwa(self, c: Classification) -> AppliedItem:
@@ -589,6 +591,22 @@ class Run:
         for a in self.rwa_applied:
             self._cls_exception(a, "asset")
         chk = {c.check_id: c for c in self.checks}
+        if legacy_bank_benchmark_allowed(self.ds, self.profile):
+            gaps = supplemental_bank_risk_gaps(self.ds, self.profile)
+            if gaps:
+                self._add(ExceptionItem(
+                    "EXC-BANK-RISK-EVIDENCE", "Framework evidence",
+                    "Bank market and operational risk evidence is missing",
+                    "This legacy bank workbook supplies an explicit Expected Output and complete credit-RWA "
+                    "schedule, so the engine calculated the benchmark result. It does not provide separate "
+                    "market-risk RWA or operational-risk RWA evidence; those risks are not silently treated as "
+                    "zero for management-ready status.",
+                    "Keep the calculated result as a draft/benchmark only",
+                    "Do not sign off until both supplemental bank-risk schedules are supplied",
+                    "SCB-CA-2025 bank capital/RWA evidence requirements",
+                    "Market-risk RWA and operational-risk RWA schedules, or explicit nil rows",
+                    "Calculated from supplied credit-RWA schedule and Expected Output benchmark",
+                    maker_ref="Preflight"), None, "High")
 
         # enrich statutory reserve exception with the maker schedule mismatch
         for e in self.exceptions:

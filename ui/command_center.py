@@ -121,11 +121,13 @@ html, body { margin: 0; padding: 0; background: transparent; }
 @media (max-width: 1000px) { .c8, .c7, .c6, .c5 { grid-column: span 12; } .c4 { grid-column: span 6; } .c3 { grid-column: span 6; }
                               .c4.last { grid-column: span 12; } }
 @media (max-width: 760px)  { .g > * { grid-column: span 12 !important; } .tb { grid-template-columns: 1fr; } .tr { justify-content: space-between; } }
+@media (max-width: 760px)  { .hero { grid-template-columns: 1fr; min-height: 0; padding: 24px; } .hero-aside { justify-content: flex-start; }
+                              .hero .gauge { width: min(214px, 100%); height: auto; aspect-ratio: 1; } }
 
 /* hero */
 .hero { position: relative; overflow: hidden; border-radius: 26px; padding: 30px 32px; color: #fff; min-height: 270px;
         background: linear-gradient(125deg, #2B1747 0%, #4F2D7F 48%, #7B4FC4 100%); box-shadow: 0 22px 54px rgba(60,30,110,.30);
-        display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 26px; align-items: center; animation: up .6s ease both; }
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 30%); gap: 26px; align-items: center; animation: up .6s ease both; }
 .hero .orb { position: absolute; border-radius: 50%; filter: blur(40px); pointer-events: none; }
 .hero .o1 { width: 340px; height: 340px; right: 20%; top: -160px; background: rgba(176,140,255,.45); animation: drift 9s ease-in-out infinite alternate; }
 .hero .o2 { width: 260px; height: 260px; left: -60px; bottom: -150px; background: rgba(255,255,255,.18); animation: drift 11s ease-in-out infinite alternate-reverse; }
@@ -134,11 +136,13 @@ html, body { margin: 0; padding: 0; background: transparent; }
               background-size: 34px 34px; -webkit-mask-image: radial-gradient(70% 90% at 75% 40%, #000 0%, transparent 70%);
               mask-image: radial-gradient(70% 90% at 75% 40%, #000 0%, transparent 70%); }
 .hero > div { position: relative; z-index: 1; min-width: 0; }
+.hero-copy { min-width: 0; }
+.hero-aside { min-width: 0; width: 100%; display: flex; justify-content: flex-end; align-items: center; }
 .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 600; background: rgba(255,255,255,.12);
            border: 1px solid rgba(255,255,255,.22); padding: 5px 11px; border-radius: 999px; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #7CF0B5; animation: pulse 2s infinite; }
 .hero .h1 { font-size: 14.5px; font-weight: 600; margin-top: 18px; color: #E8DFFA; }
-.huge { font-size: 66px; font-weight: 700; letter-spacing: -.04em; line-height: 1; margin-top: 6px; white-space: nowrap; font-variant-numeric: tabular-nums;
+.huge { font-size: clamp(42px, 6vw, 66px); font-weight: 700; letter-spacing: -.04em; line-height: 1.05; margin-top: 6px; white-space: nowrap; max-width: 100%; overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
         text-shadow: 0 8px 30px rgba(0,0,0,.18); }
 .huge .pct { font-size: 30px; font-weight: 500; margin-left: 4px; color: #E0D3F7; }
 .gb { font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px; white-space: nowrap; background: rgba(255,255,255,.14);

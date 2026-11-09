@@ -296,6 +296,14 @@ class TestAllComponentPages(unittest.TestCase):
         self.assertIn("in the system — RBI register", comps["t13_rbi"])
         self.assertIn("RBI reference", comps["t13_rbi"])
 
+    def test_rbi_hero_uses_responsive_non_overlapping_layout(self):
+        run_app()
+        html = {k.get("key"): k["html"] for n, a, k in stub.CALLS if n == "component"}["t13_rbi"]
+        self.assertIn("hero-copy", html)
+        self.assertIn("hero-aside", html)
+        self.assertIn("grid-template-columns: 1fr", html)
+        self.assertIn("minmax(210px, 30%)", html)
+
     def test_overlays_tables_and_toggles_present(self):
         run_app()
         comps = {k.get("key"): k for n, a, k in stub.CALLS if n == "component"}

@@ -209,6 +209,7 @@ def ingest(path: str, large_rows: int = LARGE_ROWS) -> Dataset:
                     break
             if n > large_rows:
                 ds.large_sheets.append(ws.title)
+                ds.sheet_rows[ws.title] = n
                 ds.ingestion_log.append(f"'{ws.title}': more than {large_rows:,} rows and not a standard input sheet - "
                                         "use Large data import (streams it into the local data store)")
             else:

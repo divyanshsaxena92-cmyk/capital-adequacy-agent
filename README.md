@@ -25,17 +25,38 @@ composition, RWA evidence, and any derivative deal schedule. Existing NBFC workb
 NBFC-CA-2025 minimums (15% CRAR and 10% Tier 1 for ML; UL-specific CET1 evidence remains a review item).
 
 Commercial-bank workbooks should contain a presentation balance sheet plus capital and RWA schedules with explicit
-CET1/AT1/Tier 2 composition and eligibility, and separate market-risk and operational-risk RWA schedules. Those
-supplemental schedules are added deterministically to total RWA. Missing schedules, ambiguous templates, malformed
-rows, or absent capital composition block the evidence gate; missing risk is never inferred as zero. A schedule
+CET1/AT1/Tier 2 composition and eligibility. Separate market-risk and operational-risk RWA schedules are optional
+bank extensions and are added deterministically when supplied. Legacy demo/maker workbooks with an explicit
+`Expected Output` benchmark and complete credit-RWA schedule remain calculable as drafts when those extensions are
+absent; the run opens a prominent evidence exception and never treats the missing risks as zero for
+management-ready status. Missing schedules in a non-benchmark bank workbook, ambiguous templates, malformed
+rows, or absent capital composition still block the evidence gate. A schedule
 containing a documented zero row is accepted as explicit nil evidence and is logged. Rating, collateral, guarantee,
 netting, minority-interest, derivative counterparty and instrument-term evidence remains a review/blocking item
 according to materiality; an approved rule cannot substitute for missing source evidence.
 
 The supported calculation is deliberately narrower than a regulatory return: unsupported bank templates, missing
-capital composition, missing market or operational risk evidence, ambiguous risk weights, stale RBI text, and
+capital composition, ambiguous risk weights, stale RBI text, and
 unclear entity/framework markers remain draft or blocked. The repository's bank and NBFC regression fixtures are
 synthetic and contain no client data.
+
+## Student demo architecture and limitations
+
+This is an IIT Kanpur student prototype for demonstrating controlled calculations with sanitized sample data, not
+a regulatory-return production system. The deterministic engine performs ingestion, classification from the local
+rule library, capital/RWA arithmetic, benchmark tie-outs, and exception/status controls. The RAG layer only
+retrieves and cites RBI text in force for the reporting date; it does not invent rules, approve interpretations, or
+replace source evidence. Market-risk and operational-risk schedules exist to demonstrate the additional bank RWA
+extensions when a maker supplies them; older sample workbooks may omit them and still produce a clearly labelled
+calculated draft.
+
+Large unrecognised workbook sheets are not silently discarded: the standard loader records the sheet name and row
+count, marks it for the **Large data import** page, and leaves the source untouched. That page streams the sheet
+into a local SQLite store in batches, detects headers below title rows, records column mappings/types and import
+counts, supports profiling and paged browsing, and can attach supported loan-tape summaries as evidence. Large
+data import is local-only and bounded by the configured uploader/runtime limits; generic tables are browseable but
+are not automatically included in capital or RWA calculations. Nothing in the demo should be described as a
+complete Basel return or management approval.
 
 Uploadable sanitized fixtures are included for end-to-end testing:
 
