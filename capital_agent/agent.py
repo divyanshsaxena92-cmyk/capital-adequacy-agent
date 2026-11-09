@@ -113,7 +113,8 @@ class Run:
         if self.rag_db and os.path.exists(self.rag_db):
             from .rag_store import RagStore
             rag = RagStore(self.rag_db)
-        self.entity_type = "NBFC" if "45-ic" in norm(ds.raw_text) else "UNKNOWN"
+        bank_evidence = "banking regulation act" in norm(ds.raw_text)
+        self.entity_type = "BANK" if bank_evidence else ("NBFC" if "45-ic" in norm(ds.raw_text) else "UNKNOWN")
         self.kb = KnowledgeBase(self.kb_path, ds.reporting_date, rag,
                                 ["NBFC"] if self.entity_type == "NBFC" else None)
         self.rbi_health, self.rbi_drift = None, []
@@ -133,9 +134,16 @@ class Run:
                  f"rejected: {self.rules.rejected}", actor="Engine")
 
         # ---- entity profiling (which framework applies?)
-        self.minimums = self.rules.get("R-MIN-001")["minimums"][self.layer]
-        self.log("1 Ingestion", "-", f"Entity profiled as {self.entity_type} (statutory reserve u/s 45-IC present); "
-                 f"framework NBFC-CA-2025; layer assumed {self.layer}", rule="R-MIN-001", actor="Agent")
+        if self.entity_type == "BANK":
+            self.minimums = {"crar": 0.115, "tier1": 0.095}
+            framework = "SCB-CA-2025"
+            profile_basis = "commercial-bank evidence in presentation and capital schedules"
+        else:
+            self.minimums = self.rules.get("R-MIN-001")["minimums"][self.layer]
+            framework = "NBFC-CA-2025"
+            profile_basis = "statutory reserve u/s 45-IC present" if self.entity_type == "NBFC" else "entity not identified"
+        self.log("1 Ingestion", "-", f"Entity profiled as {self.entity_type} ({profile_basis}); "
+                 f"framework {framework}; layer assumed {self.layer}", rule="R-MIN-001", actor="Agent")
 
         # ---- Stage 2: validation
         self.checks: list[Check] = source_checks(ds)
@@ -213,6 +221,13 @@ class Run:
         ecl = ds.find("stage 1 - impairment", "Note 8")
         if ecl:
             add(ecl, amount=abs(ecl.amount))
+        # Tier 2 instruments are outside the Note 23 equity breakup.
+        seen = set()
+        for pat in ("tier 2 bonds", "subordinated debt", "at1 bonds", "perpetual debt"):
+            sv = ds.find(pat, "Note 24")
+            if sv and sv.key not in seen and abs(sv.amount) > TOL:
+                add(sv)
+                seen.add(sv.key)
         for it in items:
             self.log("3 Mapping", it.item_id, f"Capital candidate identified: {it.label}", it.source_ref, it.amount,
                      actor="Agent")
@@ -237,7 +252,10 @@ class Run:
             f"{onfa.ref} - {pre.ref if pre else ''}")
         if pre:
             add("Prepaid expenses", pre.amount, pre.ref, {"deducted_from_capital": pre_lbl in deducted_labels})
-        for pat in ("property, plant", "right of use", "current tax assets", "^investments$"):
+        fixed = [sv for pat in ("property, plant", "right of use") if (sv := ds.find(pat))]
+        if fixed:
+            add("Fixed assets + ROU", sum(sv.amount for sv in fixed), " + ".join(sv.ref for sv in fixed))
+        for pat in ("current tax assets", "^investments$"):
             sv = ds.find(pat)
             if sv and abs(sv.amount) > TOL:
                 add(sv.label, sv.amount, sv.ref)
@@ -256,7 +274,10 @@ class Run:
     # ============================================================ maker matching
     MAKER_CAP_KEYS = [("equity share capital", "paid-up"), ("securities premium", "securities premium"),
                       ("statutory reserve", "statutory reserve"), ("retained earnings", "retained earnings"),
-                      ("deferred tax", "deferred tax"), ("prepaid", "prepaid"), ("stage 1", "general provisions")]
+                      ("deferred tax", "deferred tax"), ("prepaid", "prepaid"), ("stage 1", "general provisions"),
+                      ("investment fluctuation reserve", "investment fluctuation reserve"),
+                      ("tier 2 bonds", "tier 2 bonds"), ("subordinated debt", "tier 2 bonds"),
+                      ("at1", "at1 bonds"), ("perpetual debt", "at1 bonds")]
 
     def _maker_cap(self, it: LineItem):
         nl = norm(it.label)
@@ -279,6 +300,8 @@ class Run:
         adj_s = str(rec.get("agent_adjusted_amount", "")).strip().lower()
         if rec.get("capital_category") == "Tier 2" and ("cap" in adj_s or "general provision" in norm(rec["line_item"])):
             return "T2_GENERAL_PROVISION"
+        if rec.get("capital_category") == "Tier 2":
+            return "T2_INCLUDE"
         adj = raw if adj_s == "same" else _num(adj_s)
         if adj is None:
             return None
@@ -315,10 +338,11 @@ class Run:
                  "Engine")
         return a
 
-    MAKER_RWA_KEYS = [("cash and bank", "cash and bank"), ("trade receivables", "trade receivables"),
+    MAKER_RWA_KEYS = [("other non-financial", "other non-financial"), ("prepaid", "prepaid"),
+                      ("cash and bank", "cash and bank"), ("trade receivables", "trade receivables"),
                       ("security deposits", "security deposits"), ("payment gateway", "payment gateway"),
-                      ("other advances", "other advances"), ("other non-financial", "other non-financial"),
-                      ("prepaid", "other non-financial"), ("property", "fixed assets"), ("right of use", "fixed assets"),
+                      ("other advances", "other advances"),
+                      ("fixed assets", "fixed assets"), ("investments", "investments"),
                       ("loans", "loan portfolio")]
 
     def _apply_rwa(self, c: Classification) -> AppliedItem:
@@ -351,6 +375,9 @@ class Run:
             basis = ("Maker risk weight retained pending SME" if rec and maker_rw is not None
                      else "Maker risk weight missing - agent/conservative weight pending SME" if rec
                      else "Agent/conservative weight pending SME")
+        if rec is None and nl.startswith("prepaid"):
+            applied = 1.0
+            basis = "No explicit prepaid RWA row supplied; 100% risk weight retained pending SME"
         if rec is None:
             basis += " [not in maker RWA schedule]"
         a = AppliedItem(c, rec["item_id"] if rec else None,
@@ -400,8 +427,9 @@ class Run:
     def _log_calc(self, r, label):
         self.log("4 Calculation", "TIER1", f"{label}: Tier 1 = sum of included items less deductions", "", None,
                  "R-T1-*", "paras 7-10, 14, 16", "", round(r.tier1, 2))
-        self.log("4 Calculation", "TIER2", f"{label}: Tier 2 = min(Stage 1 ECL {r.gp_gross:,.2f}, 1.25% x RWA "
-                 f"{r.gp_cap:,.2f}), capped at Tier 1", "", r.gp_gross, "R-T2-001/002", "paras 13(iii), 16(6), 6(3)",
+        self.log("4 Calculation", "TIER2", f"{label}: Tier 2 = general provisions {r.gp_gross:,.2f} + other eligible "
+                 f"Tier 2 {r.tier2_other:,.2f}, with provisions capped at 1.25% of RWA {r.gp_cap:,.2f}; "
+                 f"total capped at Tier 1", "", r.gp_gross, "R-T2-001/002/003", "paras 13(iii), 16(6), 6(3)",
                  "Cap", round(r.tier2, 2))
         self.log("4 Calculation", "RWA", f"{label}: Total RWA = on-balance-sheet {r.rwa_credit_on_bs:,.2f} + CCR "
                  f"{r.rwa_ccr:,.2f}", "", None, "R-RWA-*/R-CCR-*", "para 18", "", round(r.total_rwa, 2))

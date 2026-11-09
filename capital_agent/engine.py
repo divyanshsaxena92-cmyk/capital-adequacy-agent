@@ -77,7 +77,7 @@ class CapitalLine:
     item_id: str
     label: str
     amount: float
-    treatment: str              # T1_INCLUDE | T1_EXCLUDE | T1_DEDUCT | T2_GENERAL_PROVISION
+    treatment: str              # T1_INCLUDE | T1_EXCLUDE | T1_DEDUCT | T2_INCLUDE | T2_GENERAL_PROVISION
     source_ref: str = ""
 
     @property
@@ -121,6 +121,7 @@ class CapitalResult:
     tier2_limited_by_tier1: bool
     minimums: dict
     breaches: list = field(default_factory=list)
+    tier2_other: float = 0.0
 
     def as_dict(self) -> dict:
         return {"Tier 1 Capital": self.tier1, "Tier 2 Capital": self.tier2, "Total RWA": self.total_rwa,
@@ -131,11 +132,12 @@ def compute_capital(capital_lines: list[CapitalLine], rwa_lines: list[RWALine], 
                     gp_cap_rate: float, minimums: dict) -> CapitalResult:
     tier1 = sum(l.tier1_effect for l in capital_lines)
     gp_gross = sum(abs(l.amount) for l in capital_lines if l.treatment == "T2_GENERAL_PROVISION")
+    tier2_other = sum(abs(l.amount) for l in capital_lines if l.treatment == "T2_INCLUDE")
     rwa_bs = sum(l.rwa for l in rwa_lines)
     total_rwa = rwa_bs + cem.rwa
     gp_cap = gp_cap_rate * total_rwa                      # para 13(iii)
     gp_elig = min(gp_gross, gp_cap)
-    tier2 = min(gp_elig, max(tier1, 0.0))                 # para 6(3): Tier 2 <= 100% of Tier 1
+    tier2 = min(gp_elig + tier2_other, max(tier1, 0.0))  # para 6(3): Tier 2 <= 100% of Tier 1
     crar = (tier1 + tier2) / total_rwa if total_rwa else 0.0
     t1r = tier1 / total_rwa if total_rwa else 0.0
     breaches = []
@@ -146,4 +148,4 @@ def compute_capital(capital_lines: list[CapitalLine], rwa_lines: list[RWALine], 
     if "cet1" in minimums and t1r < minimums["cet1"]:
         breaches.append(f"CET1 ratio below minimum {minimums['cet1']:.0%}")
     return CapitalResult(tier1, gp_gross, gp_cap, gp_elig, tier2, rwa_bs, cem.rwa, total_rwa, crar, t1r,
-                         gp_elig > tier1, minimums, breaches)
+                         gp_elig + tier2_other > max(tier1, 0.0), minimums, breaches, tier2_other)

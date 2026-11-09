@@ -9,12 +9,15 @@ import tempfile
 import types
 import unittest
 
+from openpyxl import Workbook
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 
 from capital_agent.agent import AppliedItem, Run  # noqa: E402
 from capital_agent.classifier import AUTO, REVIEW, Classification, LineItem, RegulatoryAgent  # noqa: E402
-from capital_agent.engine import add_on_factor  # noqa: E402
+from capital_agent.engine import CEMResult, CapitalLine, RWALine, add_on_factor, compute_capital  # noqa: E402
+from capital_agent.ingest import ingest  # noqa: E402
 from capital_agent.knowledge import KnowledgeBase, RuleLibrary  # noqa: E402
 
 DATA = os.path.join(HERE, "data", "sample_client_001.xlsx")
@@ -223,6 +226,39 @@ class TestEngine(unittest.TestCase):
         before = h()
         Run(DATA, HERE).execute()
         self.assertEqual(before, h())
+
+    def test_tier2_includes_non_provision_capital(self):
+        cem = CEMResult([], 0.0, "", 0.0, 0.0, 0.2, 0.0, 0.0)
+        result = compute_capital(
+            [CapitalLine("T1", "Equity", 1000.0, "T1_INCLUDE"),
+             CapitalLine("GP", "General provision", 200.0, "T2_GENERAL_PROVISION"),
+             CapitalLine("T2", "Subordinated debt", 250.0, "T2_INCLUDE")],
+            [RWALine("A", "Asset", 10000.0, 1.0)],
+            cem, 0.0125, {"crar": 0.0, "tier1": 0.0})
+        self.assertAlmostEqual(result.tier2_other, 250.0)
+        self.assertAlmostEqual(result.tier2, 375.0)  # GP is capped at 125; other Tier 2 remains eligible.
+
+    def test_generated_empty_derivative_schedule_is_zero(self):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Capital Inputs"
+        ws.append(["Item_ID", "Reporting_Date", "Capital_Category", "Line_Item", "Raw_Amount_INR_Lakhs"])
+        ws.append(["CAP001", ASOF, "Tier 1", "Equity share capital", 100.0])
+        rwa = wb.create_sheet("RWA Inputs")
+        rwa.append(["Item_ID", "Reporting_Date", "Asset_Class", "Risk_Weight", "Asset_Value_INR_Lakhs"])
+        rwa.append(["RWA001", ASOF, "Cash", 0.0, 100.0])
+        wb.create_sheet("Derivative Inputs").append(
+            ["Item_ID", "Reporting_Date", "Deal_ID_Masked", "Trade_Date", "Maturity_Date",
+             "Pay_Ccy", "Pay_Notional", "Receive_Ccy", "Receive_Notional"])
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:
+            path = f.name
+        wb.save(path)
+        try:
+            ds = ingest(path)
+            self.assertEqual(ds.derivative_inputs, [])
+            self.assertEqual(ds.reporting_date, ASOF)
+        finally:
+            os.unlink(path)
 
 
 if __name__ == "__main__":

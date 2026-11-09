@@ -38,6 +38,7 @@ def tier2(run) -> pd.DataFrame:
         {"Component": "Stage 1 ECL (general provision)", "INR lakhs": r.gp_gross, "Reference": "para 13(iii), 16(6)"},
         {"Component": "Cap: 1.25% x Total RWA", "INR lakhs": r.gp_cap, "Reference": "para 13(iii)"},
         {"Component": "Eligible = MIN(provision, cap)", "INR lakhs": r.tier2_gp_eligible, "Reference": ""},
+        {"Component": "Other eligible Tier 2 capital", "INR lakhs": r.tier2_other, "Reference": "instrument eligibility"},
         {"Component": "Tier 1 (Tier 2 limit)", "INR lakhs": r.tier1, "Reference": "para 6(3)"},
         {"Component": "Tier 2 Capital", "INR lakhs": r.tier2, "Reference": ""},
         {"Component": "Provision not recognised", "INR lakhs": r.gp_gross - r.tier2_gp_eligible, "Reference": ""},

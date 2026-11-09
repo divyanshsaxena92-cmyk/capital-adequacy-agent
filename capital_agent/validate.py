@@ -146,4 +146,9 @@ def source_checks(ds: Dataset) -> list[Check]:
         ok = d["maturity_date"] and d["trade_date"] and d["maturity_date"] > ds.reporting_date >= d["trade_date"]
         c.append(Check(f"V20-{d['item_id']}", "Derivatives", f"{d['deal_id_masked']}: trade <= reporting < maturity",
                        "PASS" if ok else "FAIL"))
+    if not ds.derivative_inputs:
+        c.append(Check("V20-DERIVATIVE-EMPTY", "Derivatives",
+                       "Derivative input schedule is empty; derivative CEM is zero",
+                       "PASS", expected=0, actual=0,
+                       detail="No deal-level derivative rows supplied; no replacement cost or PFE was added."))
     return c

@@ -1,7 +1,7 @@
 # Controlled rule library - NBFC capital adequacy
 # Every rule must cite KB passage IDs. Rules with status != APPROVED are ignored by the engine.
 # interpretive: true  => the regulation is silent/ambiguous for this item; agent may propose, never auto-apply.
-# Treatments: T1_INCLUDE | T1_EXCLUDE | T1_DEDUCT | T2_GENERAL_PROVISION | RISK_WEIGHT | INFO
+# Treatments: T1_INCLUDE | T1_EXCLUDE | T1_DEDUCT | T2_INCLUDE | T2_GENERAL_PROVISION | RISK_WEIGHT | INFO
 library_version: "RL-1.0"
 framework: "NBFC-CA-2025"
 approved_by: "PENDING - SME sign-off required before production use"
@@ -183,6 +183,18 @@ rules:
     citations: [P6]
     interpretive: false
     default_confidence: 0.99
+    effective_from: "2025-11-28"
+    status: APPROVED
+
+  - id: R-T2-003
+    area: Tier 2
+    title: Eligible subordinated debt and investment fluctuation reserve
+    match_terms: [tier 2 bonds, subordinated debt, investment fluctuation reserve, revaluation reserve]
+    treatment: T2_INCLUDE
+    citations: [B3-T2]
+    interpretive: true
+    default_confidence: 0.85
+    evidence_required: Instrument terms and regulatory eligibility confirmation
     effective_from: "2025-11-28"
     status: APPROVED
 

@@ -116,15 +116,17 @@ def tier2(run):
                 [("Cap binding" if gp > cap else "Below cap", ""), (f"Tier 2 = {r.tier2 / r.tier1:.1%} of Tier 1 (max 100%)", "")], right)
     body += card("Cap headroom", "How the 1.25% cap behaves", f"""<div class="kv">
  <span class="k">Stage 1 ECL (provision)</span><span class="v">₹{gp:,.2f} L</span><span class="k">Cap at 1.25% of RWA</span><span class="v">₹{cap:,.2f} L</span>
- <span class="k">Not recognised</span><span class="v" style="color:#D64560">₹{gp - elig:,.2f} L</span>
+ <span class="k">Other eligible Tier 2</span><span class="v">₹{r.tier2_other:,.2f} L</span>
+ <span class="k">Provision not recognised</span><span class="v" style="color:#D64560">₹{gp - elig:,.2f} L</span>
  <span class="k">RWA needed to count it all</span><span class="v">₹{need_rwa:,.0f} L (×{need_rwa / r.total_rwa:.1f})</span>
  <span class="k">Tier 2 limit (100% of Tier 1)</span><span class="v">₹{r.tier1:,.0f} L</span></div>""", "c4", d=.06)
     steps = f"""<div class="steps">
  <div class="step" data-drill="s1"><span class="n">1</span><small>Stage 1 ECL</small><b>₹{gp:,.0f} L</b><div class="f">12-month expected credit loss</div></div>
  <div class="step" data-drill="s2"><span class="n">2</span><small>Cap = 1.25% × RWA</small><b>₹{cap:,.0f} L</b><div class="f">1.25% × ₹{r.total_rwa:,.0f} L</div></div>
  <div class="step"><span class="n">3</span><small>Eligible = min(1, 2)</small><b>₹{elig:,.0f} L</b><div class="f">{elig / gp:.0%} of the provision</div></div>
- <div class="step"><span class="n">4</span><small>Tier 2 ≤ Tier 1?</small><b style="color:#2E8B5E">Yes ✓</b><div class="f">{r.tier2 / r.tier1:.1%} of Tier 1</div></div>
- <div class="step"><span class="n">5</span><small>Tier 2 capital</small><b>₹{r.tier2:,.0f} L</b><div class="f">counts towards CRAR</div></div></div>"""
+ <div class="step"><span class="n">4</span><small>Other eligible Tier 2</small><b>₹{r.tier2_other:,.0f} L</b><div class="f">instrument capital</div></div>
+ <div class="step"><span class="n">5</span><small>Tier 2 ≤ Tier 1?</small><b style="color:#2E8B5E">Yes ✓</b><div class="f">{r.tier2 / r.tier1:.1%} of Tier 1</div></div>
+ <div class="step"><span class="n">6</span><small>Tier 2 capital</small><b>₹{r.tier2:,.0f} L</b><div class="f">counts towards CRAR</div></div></div>"""
     body += card("How Tier 2 is computed", "Para 13(iii) and 16(6) — click a step for the rule", steps, "c12", d=.2)
     vis = f"""<div style="position:relative;margin:26px 0 8px;height:44px;border-radius:14px;background:var(--track);overflow:hidden">
  <i style="position:absolute;left:0;top:0;bottom:0;width:{min(elig / gp, 1) * 100:.1f}%;background:linear-gradient(90deg,#4F2D7F,#7B4FC4);border-radius:14px;animation:growx 1.4s both;transform-origin:left"></i>
