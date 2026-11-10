@@ -304,6 +304,14 @@ class TestAllComponentPages(unittest.TestCase):
         self.assertIn("grid-template-columns: 1fr", html)
         self.assertIn("minmax(210px, 30%)", html)
 
+    def test_overview_hides_prominent_run_status_label(self):
+        run_app()
+        html = {k.get("key"): k["html"] for n, a, k in stub.CALLS if n == "component"}["cc"]
+        self.assertIn("Run status", html)
+        self.assertNotIn("Calculated draft — human approval pending", html)
+        self.assertNotIn("Blocked — evidence/control gate failed", html)
+        self.assertNotIn("Management-ready — human approval recorded", html)
+
     def test_overlays_tables_and_toggles_present(self):
         run_app()
         comps = {k.get("key"): k for n, a, k in stub.CALLS if n == "component"}

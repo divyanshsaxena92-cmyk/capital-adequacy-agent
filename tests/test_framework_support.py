@@ -81,8 +81,8 @@ class TestFrameworkSupport(unittest.TestCase):
         path = self._save(bank_workbook(include_supplemental=False))
         result = preflight(path)
         self.assertEqual(result["profile"], BANK_PROFILE)
-        self.assertTrue(any("market-risk RWA schedule is missing" in x for x in result["blocking"]))
-        self.assertTrue(any("operational-risk schedule is missing" in x for x in result["blocking"]))
+        self.assertEqual(result["blocking"], [])
+        self.assertEqual(len(result["warnings"]), 2)
 
     def test_legacy_bank_benchmark_allows_calculation_with_open_warning(self):
         wb = bank_workbook(include_supplemental=False)
@@ -100,6 +100,17 @@ class TestFrameworkSupport(unittest.TestCase):
                             for e in run.exceptions))
         self.assertFalse(run.management_ready)
 
+    def test_legacy_bank_without_benchmark_still_calculates_with_risk_exception(self):
+        path = self._save(bank_workbook(include_supplemental=False))
+        result = preflight(path)
+        self.assertEqual(result["blocking"], [])
+        run = Run(path, HERE).execute()
+        self.assertEqual(run.status, "DRAFT - CALCULATED; PENDING HUMAN APPROVAL")
+        self.assertFalse(run.benchmark)
+        self.assertTrue(any(e.exc_id == "EXC-BANK-RISK-EVIDENCE" and e.severity == "High"
+                            for e in run.exceptions))
+        self.assertFalse(run.management_ready)
+
     def test_explicit_nil_market_and_operational_rows_are_accepted(self):
         wb = bank_workbook()
         wb["Market Risk"]["B2"] = 0.0
@@ -112,10 +123,12 @@ class TestFrameworkSupport(unittest.TestCase):
     def test_missing_bank_evidence_blocks_run_status_instead_of_silent_zero(self):
         path = self._save(bank_workbook(include_supplemental=False))
         run = Run(path, HERE).execute()
-        self.assertTrue(run.status.startswith("BLOCKED"))
+        self.assertTrue(run.status.startswith("DRAFT"))
         self.assertEqual(run.market_rwa, 0.0)
-        self.assertTrue(any(c.check_id == "C10" and c.status == "FAIL" for c in run.control_checks))
-        self.assertTrue(any("market-risk RWA schedule is missing" in e.issue for e in run.exceptions))
+        self.assertFalse(run.management_ready)
+        self.assertTrue(any(e.exc_id == "EXC-BANK-RISK-EVIDENCE" and e.severity == "High"
+                            and "market-risk RWA schedule is missing" in e.issue
+                            for e in run.exceptions))
 
     def test_bank_run_includes_explicit_market_and_operational_rwa(self):
         path = self._save(bank_workbook())

@@ -49,14 +49,11 @@ def profile_for_dataset(ds: Dataset) -> FrameworkProfile:
     return UNKNOWN_PROFILE
 
 
-def legacy_bank_benchmark_allowed(ds: Dataset, profile: FrameworkProfile) -> bool:
+def legacy_bank_calculation_allowed(ds: Dataset, profile: FrameworkProfile) -> bool:
     """Allow calculation-only processing for older bank maker workbooks."""
     if profile is not BANK_PROFILE:
         return False
-    if not ds.expected_output or not ds.capital_inputs or not ds.rwa_inputs:
-        return False
-    if not any(norm(rec.get("metric", "")) == "total rwa"
-               and rec.get("expected_value") is not None for rec in ds.expected_output):
+    if not ds.capital_inputs or not ds.rwa_inputs:
         return False
     required = ("asset_class", "risk_weight", "asset_value_inr_lakhs")
     return all(
@@ -66,6 +63,15 @@ def legacy_bank_benchmark_allowed(ds: Dataset, profile: FrameworkProfile) -> boo
         and rec["risk_weight"] >= 0
         and rec["asset_value_inr_lakhs"] >= 0
         for rec in ds.rwa_inputs
+    )
+
+
+def legacy_bank_benchmark_allowed(ds: Dataset, profile: FrameworkProfile) -> bool:
+    """Whether a legacy bank workbook also supplies an explicit benchmark."""
+    return legacy_bank_calculation_allowed(ds, profile) and any(
+        norm(rec.get("metric", "")) == "total rwa"
+        and rec.get("expected_value") is not None
+        for rec in ds.expected_output
     )
 
 
@@ -106,7 +112,7 @@ def preflight_diagnostics(ds: Dataset, profile: FrameworkProfile) -> list[str]:
             diagnostics.append(
                 "Commercial-bank RWA schedule contains no data rows. Provide credit-RWA exposures and risk weights."
             )
-        if not legacy_bank_benchmark_allowed(ds, profile):
+        if not legacy_bank_calculation_allowed(ds, profile):
             diagnostics.extend(supplemental_bank_risk_gaps(ds, profile))
     if profile is UNKNOWN_PROFILE:
         diagnostics.append(

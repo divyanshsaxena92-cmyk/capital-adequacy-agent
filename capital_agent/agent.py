@@ -24,7 +24,8 @@ from .ingest import Dataset, SourceValue, ingest, norm
 from .knowledge import KnowledgeBase, RuleLibrary
 from .validate import _num, source_checks, Check
 from .security import LOCAL_ONLY_POLICY, enforce_local_only
-from .framework import (legacy_bank_benchmark_allowed, profile_for_dataset, preflight_diagnostics,
+from .framework import (legacy_bank_calculation_allowed, legacy_bank_benchmark_allowed,
+                        profile_for_dataset, preflight_diagnostics,
                         supplemental_bank_risk_gaps)
 
 SEV_RANK = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
@@ -591,16 +592,21 @@ class Run:
         for a in self.rwa_applied:
             self._cls_exception(a, "asset")
         chk = {c.check_id: c for c in self.checks}
-        if legacy_bank_benchmark_allowed(self.ds, self.profile):
+        if legacy_bank_calculation_allowed(self.ds, self.profile):
             gaps = supplemental_bank_risk_gaps(self.ds, self.profile)
             if gaps:
+                benchmark_note = (
+                    " An explicit Expected Output benchmark is available for tie-out."
+                    if legacy_bank_benchmark_allowed(self.ds, self.profile)
+                    else " No Expected Output benchmark was supplied, so benchmark tie-out remains unavailable."
+                )
                 self._add(ExceptionItem(
                     "EXC-BANK-RISK-EVIDENCE", "Framework evidence",
                     "Bank market and operational risk evidence is missing",
                     "This legacy bank workbook supplies an explicit Expected Output and complete credit-RWA "
                     "schedule, so the engine calculated the benchmark result. It does not provide separate "
                     "market-risk RWA or operational-risk RWA evidence; those risks are not silently treated as "
-                    "zero for management-ready status.",
+                    "zero for management-ready status. Missing schedules: " + "; ".join(gaps) + benchmark_note,
                     "Keep the calculated result as a draft/benchmark only",
                     "Do not sign off until both supplemental bank-risk schedules are supplied",
                     "SCB-CA-2025 bank capital/RWA evidence requirements",

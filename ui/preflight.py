@@ -7,8 +7,9 @@ from __future__ import annotations
 from openpyxl import load_workbook
 
 from capital_agent.ingest import ingest
-from capital_agent.framework import (legacy_bank_benchmark_allowed, profile_for_dataset,
-                                     preflight_diagnostics, supplemental_bank_risk_gaps)
+from capital_agent.framework import (legacy_bank_benchmark_allowed, legacy_bank_calculation_allowed,
+                                     preflight_diagnostics, profile_for_dataset,
+                                     supplemental_bank_risk_gaps)
 
 # (pattern used by Dataset.find, section, human name, required?)
 REQUIRED_BS_ITEMS = [
@@ -78,7 +79,7 @@ def run(path: str) -> dict:
         blocking.append("Reporting date not found.")
     diagnostics = preflight_diagnostics(ds, profile)
     warnings = (supplemental_bank_risk_gaps(ds, profile)
-                if legacy_bank_benchmark_allowed(ds, profile) else [])
+                if legacy_bank_calculation_allowed(ds, profile) else [])
     blocking.extend(diagnostics)
     return {"ds": ds, "roles": roles, "items": items, "blocking": blocking, "log": ds.ingestion_log,
             "large_sheets": ds.large_sheets, "profile": profile, "diagnostics": diagnostics,
