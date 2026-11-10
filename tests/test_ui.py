@@ -78,6 +78,37 @@ class TestApp(unittest.TestCase):
         self.assertEqual(tab_errors(), [])
         self.assertAlmostEqual(ss.run.final.tier1, 49045.16, places=2)
 
+    def test_supplemental_warning_banner_is_hidden_but_controls_remain(self):
+        from test_framework_support import bank_workbook
+        import tempfile
+
+        f = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        path = f.name
+        f.close()
+        try:
+            bank_workbook(include_supplemental=False).save(path)
+            with open(path, "rb") as workbook:
+                data = workbook.read()
+        finally:
+            os.unlink(path)
+        stub.FILE["upload"] = types.SimpleNamespace(getvalue=lambda: data, name="bank.xlsx")
+        stub.BUTTONS["Run agent"] = True
+        from unittest.mock import patch
+
+        def fake_build_pack(_run, output):
+            with open(output, "wb") as pack:
+                pack.write(b"test pack")
+
+        with patch("capital_agent.report.build_pack", side_effect=fake_build_pack):
+            ss = run_app()
+
+        self.assertEqual(len(ss.preflight["warnings"]), 2)
+        warnings = [str(a[0]) for n, a, k in stub.CALLS if n == "warning"]
+        self.assertFalse(any("Supplemental bank-risk evidence notice" in warning for warning in warnings))
+        self.assertTrue(any(e.exc_id == "EXC-BANK-RISK-EVIDENCE" and e.status == "OPEN"
+                            for e in ss.run.exceptions))
+        self.assertTrue(ss.run.control_checks)
+
     def test_unusable_workbook_is_blocked_not_crashed(self):
         from openpyxl import Workbook
         wb = Workbook()
