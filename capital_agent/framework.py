@@ -55,15 +55,35 @@ def legacy_bank_calculation_allowed(ds: Dataset, profile: FrameworkProfile) -> b
         return False
     if not ds.capital_inputs or not ds.rwa_inputs:
         return False
-    required = ("asset_class", "risk_weight", "asset_value_inr_lakhs")
-    return all(
-        all(rec.get(key) is not None for key in required)
-        and isinstance(rec.get("risk_weight"), (int, float))
-        and isinstance(rec.get("asset_value_inr_lakhs"), (int, float))
-        and rec["risk_weight"] >= 0
-        and rec["asset_value_inr_lakhs"] >= 0
-        for rec in ds.rwa_inputs
+    exposure_keys = (
+        "asset_value_inr_lakhs", "asset_value", "exposure",
+        "gross_exposure", "outstanding_amount", "loan_amount", "balance",
+        "amount", "amount_inr_lakhs", "exposure_inr_lakhs",
+        "outstanding_inr_lakhs", "ead", "ead_inr_lakhs",
     )
+    capital_valid = all(
+        bool(str(rec.get("capital_category", "")).strip())
+        and isinstance(rec.get("raw_amount_inr_lakhs"), (int, float))
+        and not isinstance(rec.get("raw_amount_inr_lakhs"), bool)
+        for rec in ds.capital_inputs
+    )
+
+    def valid_rwa_row(rec):
+        if not bool(str(rec.get("asset_class", "")).strip()):
+            return False
+        rw = rec.get("risk_weight")
+        if not isinstance(rw, (int, float)) or isinstance(rw, bool) or rw < 0:
+            return False
+        exposures = [rec.get(key) for key in exposure_keys if key in rec and rec.get(key) not in (None, "")]
+        return bool(exposures) and all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+            for value in exposures
+        )
+
+    return all(
+        valid_rwa_row(rec)
+        for rec in ds.rwa_inputs
+    ) and capital_valid
 
 
 def legacy_bank_benchmark_allowed(ds: Dataset, profile: FrameworkProfile) -> bool:
@@ -113,6 +133,14 @@ def preflight_diagnostics(ds: Dataset, profile: FrameworkProfile) -> list[str]:
                 "Commercial-bank RWA schedule contains no data rows. Provide credit-RWA exposures and risk weights."
             )
         if not legacy_bank_calculation_allowed(ds, profile):
+            headers = ", ".join(ds.recognized_headers.get("rwa_inputs", []))
+            if ds.rwa_inputs and headers:
+                diagnostics.append(
+                    "Commercial-bank RWA schedule rows are incomplete or non-numeric for legacy calculation. "
+                    f"Recognized headers: {headers}. Provide Asset_Class and numeric Risk_Weight; "
+                    "provide one numeric exposure/value column (for example Asset_Value_INR_Lakhs, "
+                    "Exposure, Outstanding_Amount, Balance, EAD, or another recognized numeric alias)."
+                )
             diagnostics.extend(supplemental_bank_risk_gaps(ds, profile))
     if profile is UNKNOWN_PROFILE:
         diagnostics.append(

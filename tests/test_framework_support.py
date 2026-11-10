@@ -16,7 +16,8 @@ from capital_agent.security import deployment_safety_check
 from ui.preflight import run as preflight
 
 
-def bank_workbook(include_supplemental=True):
+def bank_workbook(include_supplemental=True, rwa_exposure_header="Asset_Value_INR_Lakhs",
+                  renamed_sheets=False, reorder_sheets=False):
     wb = Workbook()
     ws = wb.active
     ws.title = "Balance Sheet"
@@ -47,7 +48,7 @@ def bank_workbook(include_supplemental=True):
     cap.append(["Item_ID", "Reporting_Date", "Capital_Category", "Line_Item", "Raw_Amount_INR_Lakhs"])
     cap.append(["CET1-01", dt.date(2026, 3, 31), "Tier 1", "Equity share capital", 100.0])
     rwa = wb.create_sheet("RWA Inputs")
-    rwa.append(["Item_ID", "Reporting_Date", "Asset_Class", "Risk_Weight", "Asset_Value_INR_Lakhs"])
+    rwa.append(["Item_ID", "Reporting_Date", "Asset_Class", "Risk_Weight", rwa_exposure_header])
     rwa.append(["RWA-01", dt.date(2026, 3, 31), "Loans", 1.0, 500.0])
     if include_supplemental:
         market = wb.create_sheet("Market Risk")
@@ -56,6 +57,12 @@ def bank_workbook(include_supplemental=True):
         operational = wb.create_sheet("Operational Risk")
         operational.append(["Item_ID", "Operational_Risk_RWA"])
         operational.append(["OR-01", 35.0])
+    if renamed_sheets:
+        for ws, name in zip(wb.worksheets, ("Presentation", "Maker capital", "Credit RWA",
+                                            "Market extension", "Ops extension")):
+            ws.title = name
+    if reorder_sheets:
+        wb._sheets = list(reversed(wb.worksheets))
     return wb
 
 
@@ -110,6 +117,22 @@ class TestFrameworkSupport(unittest.TestCase):
         self.assertTrue(any(e.exc_id == "EXC-BANK-RISK-EVIDENCE" and e.severity == "High"
                             for e in run.exceptions))
         self.assertFalse(run.management_ready)
+
+    def test_legacy_bank_accepts_parser_supported_exposure_alias(self):
+        for header in ("Exposure", "Outstanding_Amount", "Balance", "EAD"):
+            with self.subTest(header=header):
+                path = self._save(bank_workbook(include_supplemental=False,
+                                                rwa_exposure_header=header))
+                result = preflight(path)
+                self.assertEqual(result["blocking"], [], result["blocking"])
+                self.assertEqual(len(result["warnings"]), 2)
+
+    def test_legacy_bank_eligibility_is_content_based_not_filename_or_order(self):
+        path = self._save(bank_workbook(include_supplemental=False, rwa_exposure_header="Exposure",
+                                        renamed_sheets=True, reorder_sheets=True))
+        result = preflight(path)
+        self.assertEqual(result["blocking"], [], result["blocking"])
+        self.assertEqual(result["warnings"] and len(result["warnings"]), 2)
 
     def test_explicit_nil_market_and_operational_rows_are_accepted(self):
         wb = bank_workbook()
