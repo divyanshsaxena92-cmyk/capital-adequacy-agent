@@ -234,7 +234,7 @@ if getattr(current, "title", "") not in _bare or run is None:   # component page
 if pf and pf["blocking"]:
     st.error("This workbook can't be processed yet:\n\n" + "\n".join(f"- {b}" for b in pf["blocking"]))
 if pf and pf.get("warnings"):
-    st.warning("Calculated draft only — management-ready status remains blocked:\n\n" +
+    st.warning("Supplemental bank-risk evidence notice:\n\n" +
                "\n".join(f"- {w}" for w in pf["warnings"]))
 if ss.error:
     st.error("The agent stopped with an error. The Source workbook page shows how the file was read.")

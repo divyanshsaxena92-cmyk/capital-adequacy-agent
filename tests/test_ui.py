@@ -311,6 +311,8 @@ class TestAllComponentPages(unittest.TestCase):
         self.assertNotIn("Calculated draft — human approval pending", html)
         self.assertNotIn("Blocked — evidence/control gate failed", html)
         self.assertNotIn("Management-ready — human approval recorded", html)
+        warnings = [str(a[0]) for n, a, k in stub.CALLS if n == "warning"]
+        self.assertNotIn("Calculated draft only — management-ready status remains blocked", warnings)
 
     def test_overlays_tables_and_toggles_present(self):
         run_app()
